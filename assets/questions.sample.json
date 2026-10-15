@@ -1,0 +1,112 @@
+[
+  {
+    "id": "2026-10-14-001",
+    "game": "fill_gap",
+    "category": "prepositions",
+    "severity": "error",
+    "prompt": "Estoy pensando ___ cambiar de trabajo.",
+    "answers": ["en"],
+    "options": ["en", "de", "a", "por"],
+    "explanation": "pensar en + infinitive = to be thinking of doing something.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-002",
+    "game": "fill_gap",
+    "category": "ser/estar",
+    "severity": "error",
+    "prompt": "Mi hermana ___ profesora en Aberdeen.",
+    "answers": ["es"],
+    "explanation": "Professions take ser: ella es profesora. No options here, so the learner types the answer.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-003",
+    "game": "fill_gap",
+    "category": "subjunctive",
+    "severity": "suggestion",
+    "prompt": "Espero que ___ buen tiempo mañana.",
+    "answers": ["haga"],
+    "options": ["hace", "haga", "hará", "hizo"],
+    "explanation": "esperar que + subjunctive: espero que haga buen tiempo.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-004",
+    "game": "order",
+    "category": "word order",
+    "severity": "error",
+    "prompt": "Siempre me levanto a las siete.",
+    "answers": ["Siempre me levanto a las siete.", "Me levanto siempre a las siete."],
+    "explanation": "The reflexive pronoun goes before the conjugated verb: me levanto.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-005",
+    "game": "order",
+    "category": "pronoun placement",
+    "severity": "error",
+    "prompt": "¿Se lo has dicho a tu madre?",
+    "answers": ["¿Se lo has dicho a tu madre?"],
+    "explanation": "Indirect object pronoun (se) comes before the direct object pronoun (lo), and both go before the verb.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-006",
+    "game": "repair",
+    "category": "ser/estar",
+    "severity": "error",
+    "prompt": "La sopa es muy caliente hoy.",
+    "answers": ["La sopa está muy caliente hoy."],
+    "explanation": "A temporary state (temperature right now) takes estar, not ser.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-007",
+    "game": "repair",
+    "category": "gender agreement",
+    "severity": "error",
+    "prompt": "El problema es muy difícil y la gente están cansada.",
+    "answers": ["El problema es muy difícil y la gente está cansada."],
+    "explanation": "la gente is singular in Spanish, so the verb is está.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-008",
+    "game": "match",
+    "category": "collocation",
+    "severity": "suggestion",
+    "prompt": "Match the verb to its noun.",
+    "answers": [
+      ["prestar", "atención"],
+      ["tomar", "una decisión"],
+      ["hacer", "cola"],
+      ["dar", "un paseo"]
+    ],
+    "explanation": "Fixed verb + noun pairs: prestar atención, tomar una decisión, hacer cola, dar un paseo.",
+    "source": "sample",
+    "added": "2026-10-14"
+  },
+  {
+    "id": "2026-10-14-009",
+    "game": "match",
+    "category": "fixed expressions",
+    "severity": "suggestion",
+    "prompt": "Match the two halves of each expression.",
+    "answers": [
+      ["de vez", "en cuando"],
+      ["a lo", "mejor"],
+      ["por si", "acaso"]
+    ],
+    "explanation": "de vez en cuando = now and then; a lo mejor = maybe; por si acaso = just in case.",
+    "source": "sample",
+    "added": "2026-10-14"
+  }
+]
