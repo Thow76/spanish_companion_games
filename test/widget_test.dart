@@ -1,30 +1,100 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:spanish_companion_games/main.dart';
+import 'package:spanish_companion_games/models/question.dart';
+import 'package:spanish_companion_games/models/question_parser.dart';
+import 'package:spanish_companion_games/screens/home_screen.dart';
+
+Question _q(String id, GameType game) => Question(
+      id: id,
+      game: game,
+      category: 'test',
+      severity: Severity.error,
+      prompt: game == GameType.fillGap ? 'Hola ___.' : 'Hola.',
+      answers: const ['x'],
+    );
+
+ParsedQuestions _sample() => ParsedQuestions(
+      questions: [
+        _q('a', GameType.fillGap),
+        _q('b', GameType.fillGap),
+        _q('c', GameType.order),
+        _q('d', GameType.repair),
+      ],
+      problems: const [
+        QuestionProblem(index: 4, id: 'e', message: '"answers" is missing'),
+      ],
+    );
+
+Widget _app(QuestionSource source) =>
+    MaterialApp(home: HomeScreen(source: source));
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('shows four game buttons with counts', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('4 questions loaded from the sample file'), findsOneWidget);
+    for (final game in GameType.values) {
+      expect(find.text(game.label), findsOneWidget);
+    }
+    expect(find.text('2 questions'), findsOneWidget); // fill the gap
+    expect(find.text('1 question'), findsNWidgets(2)); // order, repair
+    expect(find.text('No questions yet'), findsOneWidget); // match
+    expect(
+      find.text('1 question was skipped because of a format problem'),
+      findsOneWidget,
+    );
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('a game with no questions is disabled', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final matchButton = find.ancestor(
+      of: find.text(GameType.match.label),
+      matching: find.byType(FilledButton),
+    );
+    expect(tester.widget<FilledButton>(matchButton).onPressed, isNull);
+  });
+
+  testWidgets('tapping a game opens its screen', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(GameType.fillGap.label));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 questions ready'), findsOneWidget);
+    await tester.tap(find.text('Back to games'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reload questions'), findsOneWidget);
+  });
+
+  testWidgets('reload calls the source again', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(
+      _app(() async {
+        calls++;
+        return _sample();
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+
+    await tester.tap(find.text('Reload questions'));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+  });
+
+  testWidgets('a broken file shows an error and a reload button',
+      (tester) async {
+    await tester.pumpWidget(
+      _app(() async => throw const QuestionFileException('File is not valid JSON')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('File is not valid JSON'), findsOneWidget);
+    expect(find.text('Reload questions'), findsOneWidget);
   });
 }
