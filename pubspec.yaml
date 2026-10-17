@@ -60,6 +60,18 @@ flutter:
   assets:
     - assets/questions.sample.json
 
+  # Bundled fonts (UI spec section 3). Variable-weight files from the
+  # google/fonts repo (ofl/sora, ofl/dmsans); licences in assets/fonts/OFL-*.txt.
+  # Text styles that use them set both fontWeight and
+  # fontVariations: [FontVariation('wght', <weight>)] (from U1).
+  fonts:
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-Variable.ttf
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Variable.ttf
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
