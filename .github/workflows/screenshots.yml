@@ -1,0 +1,52 @@
+# Renders the golden (screenshot) tests on every pull request and uploads the
+# PNGs as an artifact named "screenshots". UI spec section 11.
+# They are screenshots for review, not a pass/fail comparison.
+name: screenshots
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the Flutter version in the repo's .metadata
+      # (revision 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa = 3.41.5 stable).
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.5
+          cache: true
+
+      - run: flutter --version
+      - run: flutter pub get
+
+      - name: Render screenshots
+        run: flutter test --tags golden --update-goldens
+
+      - name: List screenshots
+        if: always()
+        run: |
+          echo "### Screenshots" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY"
+          find test/goldens -name '*.png' -not -path '*/failures/*' | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: |
+            test/goldens/*.png
+          if-no-files-found: warn
+          retention-days: 30
