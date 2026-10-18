@@ -37,9 +37,9 @@ Future<void> setUpGoldens() async {
 /// Material Icons, Cupertino Icons), so screenshots show real text and icons
 /// instead of the test font's boxes.
 ///
-/// Until U1 gives the app its own text theme, the screens still ask for
-/// Material's default font, Roboto, which is not bundled. DM Sans is
-/// registered under that name too so the text is readable in screenshots.
+/// Since U1 the app's theme names Sora and DM Sans for every text style, so
+/// there is no stand-in for Roboto any more: any text still asking for a
+/// font that is not bundled shows as boxes, which makes it easy to spot.
 Future<void> loadAppFonts() async {
   final manifest =
       jsonDecode(await rootBundle.loadString('FontManifest.json'))
@@ -52,10 +52,6 @@ Future<void> loadAppFonts() async {
     }
     await loader.load();
   }
-
-  final roboto = FontLoader('Roboto')
-    ..addFont(rootBundle.load('assets/fonts/DMSans-Variable.ttf'));
-  await roboto.load();
 }
 
 /// Sets the test window to [screen] at device pixel ratio 1 for this test.
