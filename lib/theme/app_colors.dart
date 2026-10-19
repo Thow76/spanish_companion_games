@@ -78,6 +78,9 @@ abstract final class AppColors {
   /// Yellow 16%: fill behind the marked words.
   static const Color markFill = Color(0x29FFD166);
 
+  /// Fully transparent (borderless buttons, dimmed options).
+  static const Color transparent = Color(0x00000000);
+
   /// Shadows and scrims.
   static const Color black = Color(0xFF000000);
 

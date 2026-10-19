@@ -9,8 +9,10 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:spanish_companion_games/widgets/game_icon.dart';
 
 /// The three screenshot sizes, at device pixel ratio 1.
 enum ScreenSize {
@@ -31,6 +33,30 @@ Future<void> setUpGoldens() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   autoUpdateGoldenFiles = true;
   await loadAppFonts();
+  await precacheGameIcons();
+}
+
+/// Loads the six game icon SVGs into flutter_svg's cache outside the
+/// fake-async test zone, so they are drawn in the screenshots instead of
+/// still loading.
+Future<void> precacheGameIcons() async {
+  for (final game in GameIcon.games) {
+    final loader = SvgAssetLoader(GameIcon.assetPath(game));
+    await svg.cache.putIfAbsent(
+      loader.cacheKey(null),
+      () => loader.loadBytes(null),
+    );
+  }
+}
+
+/// Lets real asynchronous work (asset and SVG loading) finish, then settles
+/// the frame. Call before taking a screenshot.
+Future<void> settle(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  );
+  await tester.pumpAndSettle();
 }
 
 /// Loads every font registered in the app's font manifest (Sora, DM Sans,

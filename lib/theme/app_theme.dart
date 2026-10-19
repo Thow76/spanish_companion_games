@@ -180,9 +180,7 @@ ThemeData buildAppTheme([FormFactor formFactor = FormFactor.phone]) {
               : AppColors.textSecondary,
         ),
         backgroundColor: const WidgetStatePropertyAll(AppColors.fillSubtle),
-        side: const WidgetStatePropertyAll(
-          BorderSide(color: AppColors.stroke),
-        ),
+        side: const WidgetStatePropertyAll(BorderSide(color: AppColors.stroke)),
         overlayColor: const WidgetStatePropertyAll(AppColors.fillSubtle),
       ),
     ),
