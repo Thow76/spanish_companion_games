@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter/painting.dart';
 
+import 'app_colors.dart';
+
 /// The 4px spacing scale and the fixed paddings built from it.
 abstract final class AppSpacing {
   static const double s4 = 4;
@@ -46,8 +48,9 @@ abstract final class AppRadius {
   static const double pill = 999;
 
   static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
-  static const BorderRadius controlAll =
-      BorderRadius.all(Radius.circular(control));
+  static const BorderRadius controlAll = BorderRadius.all(
+    Radius.circular(control),
+  );
   static const BorderRadius cardAll = BorderRadius.all(Radius.circular(card));
   static const BorderRadius pillAll = BorderRadius.all(Radius.circular(pill));
   static const BorderRadius markTop = BorderRadius.vertical(
@@ -104,4 +107,88 @@ abstract final class AppSizes {
 
   /// Gap slot minimum width in a Fill the gap prompt.
   static const double gapSlotMinWidth = 56;
+
+  // Icons (section 6 and 7).
+
+  /// Generic glyphs: back chevron, landscape action chevron, game icons.
+  static const double glyph = 24;
+
+  /// Icons inside icon buttons, answer options and buttons.
+  static const double iconSmall = 20;
+
+  /// Circled tick or cross on the portrait toast.
+  static const double toastIcon = 22;
+
+  /// Circled tick or cross on the landscape toast.
+  static const double toastIconLandscape = 20;
+
+  // Game cards (section 6, GameCard).
+
+  /// Icon tile on a phone game card, and on a laptop card.
+  static const double gameTilePhone = 48;
+  static const double gameTileLaptop = 56;
+
+  /// Minimum heights of a game card.
+  static const double gameCardPhone = 88;
+  static const double gameCardLaptop = 196;
+
+  /// Widest the "No questions yet" text may be on a phone card (wraps).
+  static const double gameCardCountMaxWidth = 88;
+
+  // Explanation card (section 6, ExplanationCard).
+
+  /// Width of the label column ("Meaning", "You wrote") in the portrait card.
+  static const double explanationLabelColumn = 80;
+
+  /// Smallest width left for the labelled lines beside the chips in the
+  /// landscape card; below it the card falls back to the portrait layout.
+  static const double explanationLandscapeMinRight = 240;
+
+  /// Session panel dots (current and to come).
+  static const double sessionDot = 10;
 }
+
+/// Paddings with values from the spec that are not on the 4px scale.
+abstract final class AppInsets {
+  /// Landscape explanation card: 10 top and bottom, 16 sides.
+  static const EdgeInsets explanationLandscape = EdgeInsets.symmetric(
+    vertical: 10,
+    horizontal: 16,
+  );
+
+  /// Portrait toast: 22 top, 24 sides, 40 bottom (clears the home indicator).
+  static const EdgeInsets toastPortrait = EdgeInsets.fromLTRB(24, 22, 24, 40);
+
+  /// Landscape toast, about 69 high with a 20px line.
+  static const EdgeInsets toastLandscape = EdgeInsets.symmetric(
+    vertical: 24,
+    horizontal: 24,
+  );
+
+  /// Prompt card padding: 24/20 phone portrait, 16/20 phone landscape,
+  /// 28/28 laptop (vertical/horizontal).
+  static const EdgeInsets promptPhone = EdgeInsets.symmetric(
+    vertical: 24,
+    horizontal: 20,
+  );
+  static const EdgeInsets promptLandscape = EdgeInsets.symmetric(
+    vertical: 16,
+    horizontal: 20,
+  );
+  static const EdgeInsets promptLaptop = EdgeInsets.all(28);
+
+  /// Chip padding: 4 top and bottom, 8 sides.
+  static const EdgeInsets chip = EdgeInsets.symmetric(
+    vertical: 4,
+    horizontal: 8,
+  );
+}
+
+/// Toast shadow: 0 −8 24, black 45%.
+const List<BoxShadow> appToastShadow = [
+  BoxShadow(
+    color: AppColors.toastShadow,
+    offset: Offset(0, -8),
+    blurRadius: 24,
+  ),
+];
