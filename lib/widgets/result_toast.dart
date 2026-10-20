@@ -83,7 +83,17 @@ class ResultToast extends StatelessWidget {
             ),
             child: CustomPaint(
               foregroundPainter: _TopAndSidesBorder(border),
-              child: Padding(padding: AppInsets.toastPortrait, child: content),
+              child: ConstrainedBox(
+                // About 100 high with the bottom safe area, so it covers the
+                // pinned primary button while it shows.
+                constraints: const BoxConstraints(
+                  minHeight: AppSizes.toastPortraitMinHeight,
+                ),
+                child: Padding(
+                  padding: AppInsets.toastPortrait,
+                  child: content,
+                ),
+              ),
             ),
           );
 

@@ -8,7 +8,8 @@
 ///   nothing until [onAction] is set; then "Check ›", "Next question ›" or
 ///   "See results ›" in accent.
 /// - Laptop: one wide bar: close button, title, "Question 2 of 3"
-///   right-aligned. Hairline underneath.
+///   right-aligned. The hairline underneath is drawn full width by
+///   [GameFrame].
 ///
 /// No progress bar anywhere.
 library;
@@ -108,33 +109,29 @@ class GameTopBar extends StatelessWidget {
 
   Widget _laptop(BuildContext context) {
     final type = AppTypography.of(context);
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s16),
-        child: Row(
-          children: [
-            AppIconButton(
-              icon: Icons.close_rounded,
-              tooltip: 'Close',
-              onPressed: onBack,
-              compact: true,
+    // The hairline under the bar is drawn full width by GameFrame.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s16),
+      child: Row(
+        children: [
+          AppIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Close',
+            onPressed: onBack,
+            compact: true,
+          ),
+          const SizedBox(width: AppSpacing.s16),
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(title, style: type.gameTitle),
             ),
+          ),
+          if (current != null && total != null) ...[
             const SizedBox(width: AppSpacing.s16),
-            Expanded(
-              child: Semantics(
-                header: true,
-                child: Text(title, style: type.gameTitle),
-              ),
-            ),
-            if (current != null && total != null) ...[
-              const SizedBox(width: AppSpacing.s16),
-              Count(current: current!, total: total!),
-            ],
+            Count(current: current!, total: total!),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -168,27 +165,31 @@ class _TopBarAction extends StatelessWidget {
         label: label,
         excludeSemantics: true,
         onTap: onPressed,
-        child: InkWell(
-          onTap: onPressed,
-          focusNode: focusNode,
-          borderRadius: AppRadius.controlAll,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: AppSizes.landscapeTopBar,
-              minWidth: AppSizes.minTarget,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.s8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(label, style: style),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: AppSizes.glyph,
-                    color: colour,
-                  ),
-                ],
+        // Its own Material, so the ink does not depend on the screen's.
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onPressed,
+            focusNode: focusNode,
+            borderRadius: AppRadius.controlAll,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: AppSizes.landscapeTopBar,
+                minWidth: AppSizes.minTarget,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.s8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: style),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: AppSizes.glyph,
+                      color: colour,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
