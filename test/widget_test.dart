@@ -9,7 +9,7 @@ Question _q(String id, GameType game) => Question(
       id: id,
       game: game,
       category: 'test',
-      severity: Severity.error,
+      type: QuestionType.grammar,
       prompt: game == GameType.fillGap ? 'Hola ___.' : 'Hola.',
       answers: const ['x'],
     );
@@ -30,7 +30,7 @@ Widget _app(QuestionSource source) =>
     MaterialApp(home: HomeScreen(source: source));
 
 void main() {
-  testWidgets('shows four game buttons with counts', (tester) async {
+  testWidgets('shows six game buttons with counts', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
@@ -40,7 +40,8 @@ void main() {
     }
     expect(find.text('2 questions'), findsOneWidget); // fill the gap
     expect(find.text('1 question'), findsNWidgets(2)); // order, repair
-    expect(find.text('No questions yet'), findsOneWidget); // match
+    // choose_correction, match, spot_error
+    expect(find.text('No questions yet'), findsNWidgets(3));
     expect(
       find.text('1 question was skipped because of a format problem'),
       findsOneWidget,

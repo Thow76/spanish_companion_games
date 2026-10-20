@@ -217,16 +217,21 @@ class _GameButton extends StatelessWidget {
     );
   }
 
+  // Stand-in icons until U4 restyles the home screen with the game SVGs.
   static IconData _iconFor(GameType game) {
     switch (game) {
-      case GameType.fillGap:
-        return Icons.edit_note;
-      case GameType.order:
-        return Icons.swap_horiz;
+      case GameType.chooseCorrection:
+        return Icons.find_replace;
       case GameType.repair:
         return Icons.build;
+      case GameType.fillGap:
+        return Icons.edit_note;
       case GameType.match:
         return Icons.compare_arrows;
+      case GameType.order:
+        return Icons.swap_horiz;
+      case GameType.spotError:
+        return Icons.search;
     }
   }
 }
