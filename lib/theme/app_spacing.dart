@@ -119,6 +119,9 @@ abstract final class AppSizes {
   /// Circled tick or cross on the portrait toast.
   static const double toastIcon = 22;
 
+  /// Portrait toast height, including the bottom safe area ("about 100").
+  static const double toastPortraitMinHeight = 100;
+
   /// Circled tick or cross on the landscape toast.
   static const double toastIconLandscape = 20;
 
