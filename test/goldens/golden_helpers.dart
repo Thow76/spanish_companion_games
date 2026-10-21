@@ -2,8 +2,9 @@
 ///
 /// The screenshots are for review, not pass/fail comparison: every golden
 /// test writes its PNG to `test/goldens/` and never compares it with a
-/// reference image. The PNGs are not committed; the `screenshots` workflow
-/// makes them on every pull request and uploads them as an artifact.
+/// reference image. The `screenshots` workflow makes them on every pull
+/// request, commits them to the PR branch (so they show in Files changed)
+/// and also uploads them as an artifact. Never commit them by hand.
 library;
 
 import 'dart:convert';

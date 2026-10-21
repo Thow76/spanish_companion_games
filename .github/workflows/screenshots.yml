@@ -1,6 +1,12 @@
-# Renders the golden (screenshot) tests on every pull request and uploads the
-# PNGs as an artifact named "screenshots". UI spec section 11.
+# Renders the golden (screenshot) tests on every pull request, commits the
+# PNGs back to the PR branch so they show in the PR's Files changed tab, and
+# also uploads them as an artifact named "screenshots". UI spec section 11.
 # They are screenshots for review, not a pass/fail comparison.
+#
+# The commit is pushed with GITHUB_TOKEN, and pushes made with that token do
+# not start another workflow run, so there is no loop. Its message also
+# carries [skip ci], so GitHub does not list a run waiting for approval
+# against the bot's commit.
 name: screenshots
 
 on:
@@ -8,10 +14,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: screenshots-${{ github.ref }}
+  group: screenshots-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # Check out the PR's branch itself (not the merge commit), so the
+      # screenshots can be committed back onto it.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
 
       # Pinned to the Flutter version in the repo's .metadata
       # (revision 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa = 3.41.5 stable).
@@ -32,14 +42,50 @@ jobs:
       - run: flutter --version
       - run: flutter pub get
 
+      # Remove the PNGs from the last run first, so a screenshot whose test
+      # was renamed or removed does not linger on the branch.
+      - name: Clear old screenshots
+        run: rm -f test/goldens/*.png
+
       - name: Render screenshots
         run: flutter test --tags golden --update-goldens
+
+      - name: Commit screenshots to the PR branch
+        id: commit
+        # Only for pull requests from this repo (a fork's branch cannot be
+        # pushed to), and only when every screenshot rendered.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -f -- ':(glob)test/goldens/*.png'
+          if git diff --cached --quiet; then
+            echo "No screenshot changes to commit."
+            echo "result=unchanged" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          short_sha="${HEAD_SHA:0:7}"
+          git commit -m "Screenshots for ${short_sha} [skip ci]"
+          if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+            echo "result=pushed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=push-failed" >> "$GITHUB_OUTPUT"
+            echo "::error::Could not push the screenshots to the PR branch. If this is a 403, check Settings → Actions → General → Workflow permissions is set to 'Read and write permissions'."
+            exit 1
+          fi
 
       - name: List screenshots
         if: always()
         run: |
           echo "### Screenshots" >> "$GITHUB_STEP_SUMMARY"
-          echo "Download the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY"
+          case "${{ steps.commit.outputs.result }}" in
+            pushed)    echo "Committed to the PR branch: see the PR's Files changed tab. Also in the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
+            unchanged) echo "No screenshots changed since the last commit on the PR branch. Also in the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
+            *)         echo "Download the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
           find test/goldens -name '*.png' -not -path '*/failures/*' | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
