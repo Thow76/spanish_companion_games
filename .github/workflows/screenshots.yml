@@ -4,7 +4,9 @@
 # They are screenshots for review, not a pass/fail comparison.
 #
 # The commit is pushed with GITHUB_TOKEN, and pushes made with that token do
-# not start another workflow run, so there is no loop.
+# not start another workflow run, so there is no loop. Its message also
+# carries [skip ci], so GitHub does not list a run waiting for approval
+# against the bot's commit.
 name: screenshots
 
 on:
@@ -66,7 +68,7 @@ jobs:
             exit 0
           fi
           short_sha="${HEAD_SHA:0:7}"
-          git commit -m "Screenshots for ${short_sha}"
+          git commit -m "Screenshots for ${short_sha} [skip ci]"
           if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
             echo "result=pushed" >> "$GITHUB_OUTPUT"
           else
