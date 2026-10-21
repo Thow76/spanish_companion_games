@@ -1,8 +1,10 @@
-/// Home screen: one large button per game, with the number of questions
-/// available for each, and a "Reload questions" button.
+/// Home screen: the six games in two groups by phase, "New corrections"
+/// (phase 1) and "Recall" (phase 2), one large button per game with the
+/// number of questions available for it, and a "Reload questions" button.
 ///
 /// For now the questions come from the bundled sample file. B8 will replace
-/// the loader with the Drive file.
+/// the loader with the Drive file. The look (cards, top bar, source line)
+/// is U4's; this screen only does the grouping and the counts.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,6 +12,7 @@ import 'package:flutter/material.dart';
 import '../data/question_loader.dart';
 import '../models/question.dart';
 import '../models/question_parser.dart';
+import '../widgets/phase_heading.dart';
 import 'game_placeholder_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -130,22 +133,21 @@ class _LoadedView extends StatelessWidget {
                     const SizedBox(height: 8),
                     _ProblemsNotice(problems: parsed.problems),
                   ],
-                  const SizedBox(height: 16),
-                  GridView.count(
-                    crossAxisCount: twoColumns ? 2 : 1,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: twoColumns ? 2.2 : 3.2,
-                    children: [
-                      for (final game in GameType.values)
-                        _GameButton(
-                          game: game,
-                          count: counts[game] ?? 0,
-                          onPressed: () => onGameSelected(game),
-                        ),
-                    ],
+                  // Phase 1: Andrew's own sentences with the mistake marked.
+                  const PhaseHeading.newCorrections(),
+                  _GameGroup(
+                    games: GameType.forPhase(QuestionPhase.noticeAndCorrect),
+                    counts: counts,
+                    twoColumns: twoColumns,
+                    onGameSelected: onGameSelected,
+                  ),
+                  // Phase 2: points already corrected, in new sentences.
+                  const PhaseHeading.recall(),
+                  _GameGroup(
+                    games: GameType.forPhase(QuestionPhase.recall),
+                    counts: counts,
+                    twoColumns: twoColumns,
+                    onGameSelected: onGameSelected,
                   ),
                   const SizedBox(height: 24),
                   FilledButton.tonalIcon(
@@ -159,6 +161,41 @@ class _LoadedView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// The buttons of one phase group, in home order.
+class _GameGroup extends StatelessWidget {
+  const _GameGroup({
+    required this.games,
+    required this.counts,
+    required this.twoColumns,
+    required this.onGameSelected,
+  });
+
+  final List<GameType> games;
+  final Map<GameType, int> counts;
+  final bool twoColumns;
+  final ValueChanged<GameType> onGameSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: twoColumns ? 2 : 1,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: twoColumns ? 2.2 : 3.2,
+      children: [
+        for (final game in games)
+          _GameButton(
+            game: game,
+            count: counts[game] ?? 0,
+            onPressed: () => onGameSelected(game),
+          ),
+      ],
     );
   }
 }

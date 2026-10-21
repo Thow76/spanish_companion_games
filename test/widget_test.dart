@@ -48,6 +48,28 @@ void main() {
     );
   });
 
+  testWidgets('games are grouped by phase, phase 1 first', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New corrections'), findsOneWidget);
+    expect(find.text('Recall'), findsOneWidget);
+
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+
+    // Heading, its games, next heading, its games: top to bottom.
+    final newCorrections = top('New corrections');
+    final recall = top('Recall');
+    expect(newCorrections, lessThan(recall));
+    for (final game in GameType.forPhase(QuestionPhase.noticeAndCorrect)) {
+      expect(top(game.label), greaterThan(newCorrections));
+      expect(top(game.label), lessThan(recall));
+    }
+    for (final game in GameType.forPhase(QuestionPhase.recall)) {
+      expect(top(game.label), greaterThan(recall));
+    }
+  });
+
   testWidgets('a game with no questions is disabled', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
@@ -63,6 +85,7 @@ void main() {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text(GameType.fillGap.label));
     await tester.tap(find.text(GameType.fillGap.label));
     await tester.pumpAndSettle();
 
@@ -83,9 +106,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, 1);
 
-    await tester.tap(find.text('Reload questions'));
+    // The top-bar icon: with six games in two groups the bottom "Reload
+    // questions" button sits below the test window, so a tap on it misses.
+    await tester.tap(find.byTooltip('Reload questions'));
     await tester.pumpAndSettle();
     expect(calls, 2);
+
+    // The bottom button still works once scrolled into view.
+    await tester.ensureVisible(find.text('Reload questions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reload questions'));
+    await tester.pumpAndSettle();
+    expect(calls, 3);
   });
 
   testWidgets('a broken file shows an error and a reload button',
