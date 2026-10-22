@@ -2,6 +2,7 @@
 /// `import '../widgets/widgets.dart';`
 library;
 
+export 'answer_field.dart';
 export 'answer_option.dart';
 export 'app_icon_button.dart';
 export 'chips.dart';
@@ -21,3 +22,4 @@ export 'prompt_card.dart';
 export 'result_toast.dart';
 export 'screen_frames.dart';
 export 'sentence_text.dart';
+export 'spot_error_choice.dart';
