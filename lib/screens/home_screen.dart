@@ -13,6 +13,7 @@ import '../data/question_loader.dart';
 import '../models/question.dart';
 import '../models/question_parser.dart';
 import '../widgets/phase_heading.dart';
+import 'choose_correction_screen.dart';
 import 'game_placeholder_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -47,7 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openGame(GameType game, List<Question> questions) {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => GamePlaceholderScreen(game: game, questions: questions),
+        builder: (_) => switch (game) {
+          // The games built so far; the rest still open the placeholder.
+          GameType.chooseCorrection => ChooseCorrectionScreen(
+            questions: questions,
+          ),
+          _ => GamePlaceholderScreen(game: game, questions: questions),
+        },
       ),
     );
   }
