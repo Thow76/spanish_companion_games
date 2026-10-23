@@ -229,61 +229,71 @@ class _LaptopContent extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: AppSizes.gameCardLaptop),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.s24),
+        // spaceBetween keeps "Play →" at the bottom of the card, also when
+        // the card is stretched to its neighbour's height in the home grid.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _IconTile(
-                  game: card.game,
-                  accent: accent,
-                  size: AppSizes.gameTileLaptop,
-                  enabled: hasQuestions,
-                ),
-                const Spacer(),
-                Container(
-                  padding: AppInsets.chip,
-                  decoration: BoxDecoration(
-                    color: hasQuestions
-                        ? AppColors.gameTileFill(accent)
-                        : AppColors.fillChip,
-                    borderRadius: AppRadius.pillAll,
-                  ),
-                  child: Text(
-                    GameCard.countText(card.count),
-                    style: type.chip.copyWith(
-                      color: hasQuestions ? accent : AppColors.textMuted,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _IconTile(
+                      game: card.game,
+                      accent: accent,
+                      size: AppSizes.gameTileLaptop,
+                      enabled: hasQuestions,
                     ),
-                  ),
+                    const Spacer(),
+                    Container(
+                      padding: AppInsets.chip,
+                      decoration: BoxDecoration(
+                        color: hasQuestions
+                            ? AppColors.gameTileFill(accent)
+                            : AppColors.fillChip,
+                        borderRadius: AppRadius.pillAll,
+                      ),
+                      child: Text(
+                        GameCard.countText(card.count),
+                        style: type.chip.copyWith(
+                          color: hasQuestions ? accent : AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: AppSpacing.s16),
+                Text(
+                  card.title,
+                  style: hasQuestions
+                      ? type.cardTitle
+                      : type.cardTitle.copyWith(color: AppColors.textMuted),
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                Text(card.description, style: type.cardDescription),
               ],
             ),
-            const SizedBox(height: AppSpacing.s16),
-            Text(
-              card.title,
-              style: hasQuestions
-                  ? type.cardTitle
-                  : type.cardTitle.copyWith(color: AppColors.textMuted),
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            Text(card.description, style: type.cardDescription),
-            if (hasQuestions) ...[
-              const SizedBox(height: AppSpacing.s16),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Play', style: type.button.copyWith(color: accent)),
-                  const SizedBox(width: AppSpacing.s4),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: AppSizes.iconSmall,
-                    color: accent,
-                  ),
-                ],
+            if (hasQuestions)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.s16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Play', style: type.button.copyWith(color: accent)),
+                    const SizedBox(width: AppSpacing.s4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: AppSizes.iconSmall,
+                      color: accent,
+                    ),
+                  ],
+                ),
               ),
-            ],
           ],
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
+import 'package:spanish_companion_games/widgets/game_card.dart';
 
 Question _q(String id, GameType game) => Question(
       id: id,
@@ -34,12 +35,18 @@ void main() {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    expect(find.text('4 questions loaded from the sample file'), findsOneWidget);
+    expect(find.text('4 questions · sample file'), findsOneWidget);
     for (final game in GameType.values) {
       expect(find.text(game.label), findsOneWidget);
     }
-    expect(find.text('2 questions'), findsOneWidget); // fill the gap
-    expect(find.text('1 question'), findsNWidgets(2)); // order, repair
+    // Phone cards show the number over "question(s)".
+    Finder countOn(GameType game, String text) => find.descendant(
+          of: find.byKey(ValueKey('game-card-${game.jsonValue}')),
+          matching: find.text(text),
+        );
+    expect(countOn(GameType.fillGap, '2'), findsOneWidget);
+    expect(countOn(GameType.order, '1'), findsOneWidget);
+    expect(countOn(GameType.repair, '1'), findsOneWidget);
     // choose_correction, match, spot_error
     expect(find.text('No questions yet'), findsNWidgets(3));
     expect(
@@ -74,11 +81,10 @@ void main() {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    final matchButton = find.ancestor(
-      of: find.text(GameType.match.label),
-      matching: find.byType(FilledButton),
-    );
-    expect(tester.widget<FilledButton>(matchButton).onPressed, isNull);
+    final matchCard = find.byKey(const ValueKey('game-card-match'));
+    expect(tester.widget<GameCard>(matchCard).onTap, isNull);
+    final ink = find.descendant(of: matchCard, matching: find.byType(InkWell));
+    expect(tester.widget<InkWell>(ink).onTap, isNull);
   });
 
   testWidgets('tapping a game opens its screen', (tester) async {
@@ -92,7 +98,7 @@ void main() {
     expect(find.text('2 questions ready'), findsOneWidget);
     await tester.tap(find.text('Back to games'));
     await tester.pumpAndSettle();
-    expect(find.text('Reload questions'), findsOneWidget);
+    expect(find.byTooltip('Reload questions'), findsOneWidget);
   });
 
   testWidgets('reload calls the source again', (tester) async {
@@ -106,18 +112,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, 1);
 
-    // The top-bar icon: with six games in two groups the bottom "Reload
-    // questions" button sits below the test window, so a tap on it misses.
+    // Reload is the top-bar icon button (UI spec section 6, U4).
     await tester.tap(find.byTooltip('Reload questions'));
     await tester.pumpAndSettle();
     expect(calls, 2);
-
-    // The bottom button still works once scrolled into view.
-    await tester.ensureVisible(find.text('Reload questions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reload questions'));
-    await tester.pumpAndSettle();
-    expect(calls, 3);
   });
 
   testWidgets('a broken file shows an error and a reload button',
