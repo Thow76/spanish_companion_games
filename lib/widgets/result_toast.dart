@@ -245,7 +245,12 @@ class _ResultToastHostState extends State<ResultToastHost> {
   @override
   Widget build(BuildContext context) {
     final landscape = FormFactor.of(context) == FormFactor.phoneLandscape;
-    final side = landscape ? AppSpacing.landscapePadding : 0.0;
+    // Landscape: line the toast up with the content column, which sits
+    // inside the safe area (camera cutout, navigation bar) plus 44. The
+    // host is outside the screen's SafeArea, so add the insets here.
+    final safe = MediaQuery.paddingOf(context);
+    final left = landscape ? safe.left + AppSpacing.landscapePadding : 0.0;
+    final right = landscape ? safe.right + AppSpacing.landscapePadding : 0.0;
     // ClipRect: the slide moves the toast by painting, not layout, so the
     // Stack alone would not clip it.
     return ClipRect(
@@ -253,8 +258,8 @@ class _ResultToastHostState extends State<ResultToastHost> {
         children: [
           Positioned.fill(child: widget.child),
           Positioned(
-            left: side,
-            right: side,
+            left: left,
+            right: right,
             bottom: 0,
             child: Offstage(
               offstage: _gone,

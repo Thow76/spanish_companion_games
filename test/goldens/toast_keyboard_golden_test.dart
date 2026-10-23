@@ -8,6 +8,9 @@
 /// - `toast_keyboard-after-hide_<phone|landscape>`: a game frame after a
 ///   question was checked, the toast has gone and the keyboard is open.
 ///   Nothing should show at the bottom except the frame's own content.
+/// - `toast_checked-cutout_landscape`: the toast showing in phone landscape
+///   on a phone with a camera cutout on the left. Its left and right edges
+///   should line up with the content above it, not run into the cutout.
 @Tags(['golden'])
 library;
 
@@ -71,6 +74,37 @@ void main() {
       await tester.pumpAndSettle();
     });
   }
+
+  testWidgets('toast showing, camera cutout, landscape', (tester) async {
+    setScreenSize(tester, ScreenSize.landscape);
+    // A camera cutout on the left and the gesture bar at the bottom, as on
+    // Andrew's phone held with the camera on the left.
+    tester.view.padding = const FakeViewPadding(left: 48, bottom: 20);
+    final result = ValueNotifier<bool?>(null);
+    addTearDown(result.dispose);
+
+    await tester.pumpWidget(_App(child: _Screen(result: result)));
+    await settle(tester);
+
+    result.value = true;
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // Left edges of the toast and the content line up.
+    final toastLeft = tester.getTopLeft(find.byType(ResultToast)).dx;
+    final textLeft = tester.getTopLeft(find.text('Question 3 of 3')).dx;
+    expect(toastLeft, textLeft);
+
+    await expectLater(
+      find.byType(_App),
+      matchesGoldenFile(
+        goldenName('toast', 'checked-cutout', ScreenSize.landscape),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
 }
 
 /// A game frame with a title and one line of content; [result] drives the
