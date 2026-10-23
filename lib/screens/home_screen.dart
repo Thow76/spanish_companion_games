@@ -1,10 +1,13 @@
 /// Home screen: the six games in two groups by phase, "New corrections"
-/// (phase 1) and "Recall" (phase 2), one large button per game with the
-/// number of questions available for it, and a "Reload questions" button.
+/// (phase 1) and "Recall" (phase 2), one card per game with the number of
+/// questions available for it, and a reload button in the top bar.
 ///
 /// For now the questions come from the bundled sample file. B8 will replace
-/// the loader with the Drive file. The look (cards, top bar, source line)
-/// is U4's; this screen only does the grouping and the counts.
+/// the loader with the Drive file and pass its name as [HomeScreen.sourceName].
+///
+/// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
+/// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
+/// grid per group with 32 between the groups.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,7 +15,12 @@ import 'package:flutter/material.dart';
 import '../data/question_loader.dart';
 import '../models/question.dart';
 import '../models/question_parser.dart';
-import '../widgets/phase_heading.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_typography.dart';
+import '../theme/form_factor.dart';
+import '../widgets/widgets.dart';
 import 'choose_correction_screen.dart';
 import 'game_placeholder_screen.dart';
 
@@ -20,11 +28,22 @@ import 'game_placeholder_screen.dart';
 typedef QuestionSource = Future<ParsedQuestions> Function();
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.source = loadQuestionsFromAsset});
+  const HomeScreen({
+    super.key,
+    this.source = loadQuestionsFromAsset,
+    this.sourceName = sampleSourceName,
+  });
 
   /// Where the questions come from. Defaults to the bundled sample file.
   /// Tests pass a fake here.
   final QuestionSource source;
+
+  /// Short name of where the questions come from, shown in the top bar's
+  /// source line ("9 questions · sample file"). B8 passes the Drive file's
+  /// name.
+  final String sourceName;
+
+  static const String sampleSourceName = 'sample file';
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -61,38 +80,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Spanish Companion Games'),
-        actions: [
-          IconButton(
-            tooltip: 'Reload questions',
-            icon: const Icon(Icons.refresh),
-            onPressed: _reload,
-          ),
-        ],
-      ),
-      body: FutureBuilder<ParsedQuestions>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _ErrorView(
-              message: _describeError(snapshot.error!),
-              onReload: _reload,
-            );
-          }
-          final parsed = snapshot.data!;
-          return _LoadedView(
-            parsed: parsed,
+    return FutureBuilder<ParsedQuestions>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _LoadingView();
+        }
+        if (snapshot.hasError) {
+          return _ErrorView(
+            message: _describeError(snapshot.error!),
             onReload: _reload,
-            onGameSelected: (game) => _openGame(game, parsed.forGame(game)),
           );
-        },
-      ),
+        }
+        final parsed = snapshot.data!;
+        return _LoadedView(
+          parsed: parsed,
+          sourceLine: _sourceLine(parsed.questions.length, widget.sourceName),
+          onReload: _reload,
+          onGameSelected: (game) => _openGame(game, parsed.forGame(game)),
+        );
+      },
     );
+  }
+
+  /// "9 questions · sample file", "1 question · sample file".
+  static String _sourceLine(int total, String sourceName) {
+    final count = total == 1 ? '1 question' : '$total questions';
+    return '$count · $sourceName';
   }
 
   static String _describeError(Object error) {
@@ -104,182 +118,116 @@ class _HomeScreenState extends State<HomeScreen> {
 class _LoadedView extends StatelessWidget {
   const _LoadedView({
     required this.parsed,
+    required this.sourceLine,
     required this.onReload,
     required this.onGameSelected,
   });
 
   final ParsedQuestions parsed;
+  final String sourceLine;
   final VoidCallback onReload;
   final ValueChanged<GameType> onGameSelected;
 
   @override
   Widget build(BuildContext context) {
     final counts = parsed.countByGame;
-    final total = parsed.questions.length;
-    final textTheme = Theme.of(context).textTheme;
+    final laptop = FormFactor.of(context) == FormFactor.laptop;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth >= 600;
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    total == 1
-                        ? '1 question loaded from the sample file'
-                        : '$total questions loaded from the sample file',
-                    style: textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  if (parsed.hasProblems) ...[
-                    const SizedBox(height: 8),
-                    _ProblemsNotice(problems: parsed.problems),
-                  ],
-                  // Phase 1: Andrew's own sentences with the mistake marked.
-                  const PhaseHeading.newCorrections(),
-                  _GameGroup(
-                    games: GameType.forPhase(QuestionPhase.noticeAndCorrect),
-                    counts: counts,
-                    twoColumns: twoColumns,
-                    onGameSelected: onGameSelected,
-                  ),
-                  // Phase 2: points already corrected, in new sentences.
-                  const PhaseHeading.recall(),
-                  _GameGroup(
-                    games: GameType.forPhase(QuestionPhase.recall),
-                    counts: counts,
-                    twoColumns: twoColumns,
-                    onGameSelected: onGameSelected,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.tonalIcon(
-                    onPressed: onReload,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reload questions'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    Widget group(QuestionPhase phase) => _GameGroup(
+      games: GameType.forPhase(phase),
+      counts: counts,
+      laptop: laptop,
+      onGameSelected: onGameSelected,
     );
-  }
-}
 
-/// The buttons of one phase group, in home order.
-class _GameGroup extends StatelessWidget {
-  const _GameGroup({
-    required this.games,
-    required this.counts,
-    required this.twoColumns,
-    required this.onGameSelected,
-  });
-
-  final List<GameType> games;
-  final Map<GameType, int> counts;
-  final bool twoColumns;
-  final ValueChanged<GameType> onGameSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: twoColumns ? 2 : 1,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: twoColumns ? 2.2 : 3.2,
+    return HomeFrame(
+      topBar: HomeTopBar(source: sourceLine, onReload: onReload),
+      footer: HomeFrame.footerLine(context),
       children: [
-        for (final game in games)
-          _GameButton(
-            game: game,
-            count: counts[game] ?? 0,
-            onPressed: () => onGameSelected(game),
-          ),
+        if (parsed.hasProblems) ...[
+          SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
+          _ProblemsNotice(problems: parsed.problems),
+        ],
+        // Phase 1: Andrew's own sentences with the mistake marked.
+        const PhaseHeading.newCorrections(),
+        group(QuestionPhase.noticeAndCorrect),
+        // Laptop: 32 between the groups (the heading brings 24 of it).
+        if (laptop)
+          const SizedBox(height: AppLayout.laptopGroupGap - AppSpacing.s24),
+        // Phase 2: points already corrected, in new sentences.
+        const PhaseHeading.recall(),
+        group(QuestionPhase.recall),
       ],
     );
   }
 }
 
-class _GameButton extends StatelessWidget {
-  const _GameButton({
-    required this.game,
-    required this.count,
-    required this.onPressed,
+/// The cards of one phase group, in home order: one column on phones, a
+/// 2-column grid on laptop (cards in a row share their height, so "Play →"
+/// lines up at the bottom).
+class _GameGroup extends StatelessWidget {
+  const _GameGroup({
+    required this.games,
+    required this.counts,
+    required this.laptop,
+    required this.onGameSelected,
   });
 
-  final GameType game;
-  final int count;
-  final VoidCallback onPressed;
+  final List<GameType> games;
+  final Map<GameType, int> counts;
+  final bool laptop;
+  final ValueChanged<GameType> onGameSelected;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = count > 0;
-    final countText = switch (count) {
-      0 => 'No questions yet',
-      1 => '1 question',
-      _ => '$count questions',
-    };
+    final cards = [
+      for (final game in games)
+        GameCard.forGame(
+          key: ValueKey('game-card-${game.jsonValue}'),
+          game: game.jsonValue,
+          count: counts[game] ?? 0,
+          onTap: (counts[game] ?? 0) > 0 ? () => onGameSelected(game) : null,
+        ),
+    ];
 
-    // No colours on these styles: the button supplies its own foreground
-    // colour, which also greys the text out when the button is disabled.
-    return FilledButton(
-      onPressed: enabled ? onPressed : null,
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      child: Row(
+    if (!laptop) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(_iconFor(game), size: 36),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppLayout.phoneCardGap),
+            cards[i],
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < cards.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: AppLayout.laptopCardGap),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  game.label,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Expanded(child: cards[i]),
+                const SizedBox(width: AppLayout.laptopCardGap),
+                Expanded(
+                  child: i + 1 < cards.length
+                      ? cards[i + 1]
+                      : const SizedBox.shrink(),
                 ),
-                const SizedBox(height: 4),
-                Text(countText, style: const TextStyle(fontSize: 14)),
               ],
             ),
           ),
         ],
-      ),
+      ],
     );
-  }
-
-  // Stand-in icons until U4 restyles the home screen with the game SVGs.
-  static IconData _iconFor(GameType game) {
-    switch (game) {
-      case GameType.chooseCorrection:
-        return Icons.find_replace;
-      case GameType.repair:
-        return Icons.build;
-      case GameType.fillGap:
-        return Icons.edit_note;
-      case GameType.match:
-        return Icons.compare_arrows;
-      case GameType.order:
-        return Icons.swap_horiz;
-      case GameType.spotError:
-        return Icons.search;
-    }
   }
 }
 
+/// Questions the parser skipped: a quiet card that opens to list them.
 class _ProblemsNotice extends StatelessWidget {
   const _ProblemsNotice({required this.problems});
 
@@ -287,26 +235,43 @@ class _ProblemsNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final type = AppTypography.of(context);
     final n = problems.length;
-    return Card(
-      color: scheme.errorContainer,
+    return Material(
+      color: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppRadius.cardAll,
+        side: BorderSide(color: AppColors.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        leading: Icon(Icons.warning_amber, color: scheme.onErrorContainer),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: AppColors.textMuted,
+        collapsedIconColor: AppColors.textMuted,
+        leading: const Icon(
+          Icons.info_outline_rounded,
+          size: AppSizes.iconSmall,
+          color: AppColors.textMuted,
+        ),
         title: Text(
           n == 1
               ? '1 question was skipped because of a format problem'
               : '$n questions were skipped because of format problems',
-          style: TextStyle(color: scheme.onErrorContainer),
+          style: type.caption.copyWith(color: AppColors.textSecondary),
         ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.s16,
+          0,
+          AppSpacing.s16,
+          AppSpacing.s16,
+        ),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final problem in problems)
-            ListTile(
-              dense: true,
-              title: Text(
-                problem.toString(),
-                style: TextStyle(color: scheme.onErrorContainer),
-              ),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.s4),
+              child: Text(problem.toString(), style: type.caption),
             ),
         ],
       ),
@@ -314,36 +279,52 @@ class _ProblemsNotice extends StatelessWidget {
   }
 }
 
+/// While the file loads: the top bar (reload off) and a spinner.
+class _LoadingView extends StatelessWidget {
+  const _LoadingView();
+
+  static const String sourceLine = 'Loading questions…';
+
+  @override
+  Widget build(BuildContext context) {
+    return const HomeFrame(
+      topBar: HomeTopBar(source: sourceLine, onReload: null),
+      children: [
+        SizedBox(height: AppSpacing.s48),
+        Center(child: CircularProgressIndicator()),
+      ],
+    );
+  }
+}
+
+/// The file could not be read at all: the reason and a reload button.
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onReload});
 
   final String message;
   final VoidCallback onReload;
 
+  static const String sourceLine = 'No questions loaded';
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onReload,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reload questions'),
-            ),
-          ],
+    final type = AppTypography.of(context);
+    return HomeFrame(
+      topBar: HomeTopBar(source: sourceLine, onReload: onReload),
+      children: [
+        const SizedBox(height: AppSpacing.s48),
+        const Icon(
+          Icons.error_outline_rounded,
+          size: AppSizes.glyph,
+          color: AppColors.textMuted,
         ),
-      ),
+        const SizedBox(height: AppSpacing.s12),
+        Text(message, style: type.body, textAlign: TextAlign.center),
+        const SizedBox(height: AppSpacing.s24),
+        Center(
+          child: PrimaryButton(label: 'Reload questions', onPressed: onReload),
+        ),
+      ],
     );
   }
 }

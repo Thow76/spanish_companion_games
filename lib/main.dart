@@ -16,6 +16,7 @@ class SpanishGamesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Spanish Companion Games',
+      debugShowCheckedModeBanner: false,
       theme: appTheme(FormFactor.phone),
       // Type sizes depend on the screen size (UI spec section 3), so the
       // theme follows the current form factor.
