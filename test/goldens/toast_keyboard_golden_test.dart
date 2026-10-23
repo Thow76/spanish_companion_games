@@ -1,7 +1,7 @@
 /// The result toast once it has gone, with the on-screen keyboard up
 /// (U16). UI spec sections 6 and 11.
 ///
-/// Before this fix a hidden toast stayed in the tree, parked just below the
+/// Before this fix a hidden toast stayed drawn, parked just below the
 /// bottom edge. When the keyboard opened, that edge moved up and the old
 /// "Correct" showed through a floating keyboard (phone landscape, Repair).
 ///

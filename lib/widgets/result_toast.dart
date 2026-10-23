@@ -155,8 +155,8 @@ class _TopAndSidesBorder extends CustomPainter {
 /// tapped), so the screen can move keyboard focus to "Next question" in
 /// portrait (section 10).
 ///
-/// Once it has slid away the toast is taken out of the tree, and the host
-/// clips to its own area. Otherwise a hidden toast, parked just below the
+/// Once it has slid away the toast is put offstage (not painted, not
+/// tappable, not read out), and the host clips to its own area. Otherwise a hidden toast, parked just below the
 /// bottom edge, shows through when the on-screen keyboard moves that edge
 /// up (seen in phone landscape with a floating keyboard, 2026-10-23).
 class ResultToastHost extends StatefulWidget {
@@ -180,7 +180,7 @@ class ResultToastHost extends StatefulWidget {
 class _ResultToastHostState extends State<ResultToastHost> {
   bool _visible = false;
 
-  /// True once a hidden toast has finished sliding away: nothing is built.
+  /// True once a hidden toast has finished sliding away: it is offstage.
   bool _gone = true;
   bool _correct = true;
   Timer? _timer;
@@ -217,22 +217,12 @@ class _ResultToastHostState extends State<ResultToastHost> {
   void _show(bool correct) {
     _timer?.cancel();
     _timer = Timer(AppMotion.fast + AppMotion.toastHold, _hide);
-    if (_gone) {
-      // Put it back below the edge for one frame, then slide it up.
-      setState(() {
-        _correct = correct;
-        _visible = false;
-        _gone = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _timer != null) setState(() => _visible = true);
-      });
-    } else {
-      setState(() {
-        _correct = correct;
-        _visible = true;
-      });
-    }
+    // Offstage keeps the slide's state, so it rises from below the edge.
+    setState(() {
+      _correct = correct;
+      _visible = true;
+      _gone = false;
+    });
   }
 
   void _hide({bool notify = true}) {
@@ -262,17 +252,18 @@ class _ResultToastHostState extends State<ResultToastHost> {
       child: Stack(
         children: [
           Positioned.fill(child: widget.child),
-          if (!_gone)
-            Positioned(
-              left: side,
-              right: side,
-              bottom: 0,
+          Positioned(
+            left: side,
+            right: side,
+            bottom: 0,
+            child: Offstage(
+              offstage: _gone,
               child: IgnorePointer(
                 ignoring: !_visible,
                 child: ExcludeSemantics(
                   excluding: !_visible,
                   // Slides 1.5× its height below the edge, so its shadow
-                  // goes too, then is removed.
+                  // goes too, then goes offstage.
                   child: AnimatedSlide(
                     offset: _visible ? Offset.zero : const Offset(0, 1.5),
                     duration: AppMotion.duration(context),
@@ -283,6 +274,7 @@ class _ResultToastHostState extends State<ResultToastHost> {
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
