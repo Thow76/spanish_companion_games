@@ -154,6 +154,11 @@ class _TopAndSidesBorder extends CustomPainter {
 /// hide it. [onHidden] runs when it has gone (after about 2.5 s, or when
 /// tapped), so the screen can move keyboard focus to "Next question" in
 /// portrait (section 10).
+///
+/// Once it has slid away the toast is taken out of the tree, and the host
+/// clips to its own area. Otherwise a hidden toast, parked just below the
+/// bottom edge, shows through when the on-screen keyboard moves that edge
+/// up (seen in phone landscape with a floating keyboard, 2026-10-23).
 class ResultToastHost extends StatefulWidget {
   const ResultToastHost({
     super.key,
@@ -174,13 +179,23 @@ class ResultToastHost extends StatefulWidget {
 
 class _ResultToastHostState extends State<ResultToastHost> {
   bool _visible = false;
+
+  /// True once a hidden toast has finished sliding away: nothing is built.
+  bool _gone = true;
   bool _correct = true;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    if (widget.result != null) _show(widget.result!);
+    final result = widget.result;
+    if (result != null) {
+      // First frame: in place, no slide (as before this change).
+      _correct = result;
+      _visible = true;
+      _gone = false;
+      _timer = Timer(AppMotion.fast + AppMotion.toastHold, _hide);
+    }
   }
 
   @override
@@ -202,47 +217,74 @@ class _ResultToastHostState extends State<ResultToastHost> {
   void _show(bool correct) {
     _timer?.cancel();
     _timer = Timer(AppMotion.fast + AppMotion.toastHold, _hide);
-    setState(() {
-      _correct = correct;
-      _visible = true;
-    });
+    if (_gone) {
+      // Put it back below the edge for one frame, then slide it up.
+      setState(() {
+        _correct = correct;
+        _visible = false;
+        _gone = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _timer != null) setState(() => _visible = true);
+      });
+    } else {
+      setState(() {
+        _correct = correct;
+        _visible = true;
+      });
+    }
   }
 
   void _hide({bool notify = true}) {
     _timer?.cancel();
     _timer = null;
     if (!mounted) return;
-    setState(() => _visible = false);
+    // With reduced motion there is no slide to wait for.
+    final instant = AppMotion.duration(context) == Duration.zero;
+    setState(() {
+      _visible = false;
+      if (instant) _gone = true;
+    });
     if (notify) widget.onHidden?.call();
+  }
+
+  void _slideEnded() {
+    if (!_visible && !_gone && mounted) setState(() => _gone = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final landscape = FormFactor.of(context) == FormFactor.phoneLandscape;
     final side = landscape ? AppSpacing.landscapePadding : 0.0;
-    return Stack(
-      children: [
-        Positioned.fill(child: widget.child),
-        Positioned(
-          left: side,
-          right: side,
-          bottom: 0,
-          child: IgnorePointer(
-            ignoring: !_visible,
-            child: ExcludeSemantics(
-              excluding: !_visible,
-              // Moved 1.5× its height below the edge when hidden, so its
-              // shadow does not show either; the stack clips it.
-              child: AnimatedSlide(
-                offset: _visible ? Offset.zero : const Offset(0, 1.5),
-                duration: AppMotion.duration(context),
-                curve: AppMotion.curve,
-                child: ResultToast(correct: _correct, onTap: _hide),
+    // ClipRect: the slide moves the toast by painting, not layout, so the
+    // Stack alone would not clip it.
+    return ClipRect(
+      child: Stack(
+        children: [
+          Positioned.fill(child: widget.child),
+          if (!_gone)
+            Positioned(
+              left: side,
+              right: side,
+              bottom: 0,
+              child: IgnorePointer(
+                ignoring: !_visible,
+                child: ExcludeSemantics(
+                  excluding: !_visible,
+                  // Slides 1.5× its height below the edge, so its shadow
+                  // goes too, then is removed.
+                  child: AnimatedSlide(
+                    offset: _visible ? Offset.zero : const Offset(0, 1.5),
+                    duration: AppMotion.duration(context),
+                    curve: AppMotion.curve,
+                    onEnd: _slideEnded,
+                    child: ResultToast(correct: _correct, onTap: _hide),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
