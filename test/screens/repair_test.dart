@@ -53,7 +53,12 @@ PrimaryButton _button(WidgetTester tester) =>
 AnswerFieldState _fieldState(WidgetTester tester) =>
     tester.widget<AnswerField>(find.byType(AnswerField)).state;
 
+/// Lets the result toast come up and go. The first pump builds the frame
+/// that starts the toast's hide timer; without it the 3 s jump happens
+/// before the timer exists, the toast stays up over the bottom button and
+/// a tap on "Next question" lands on the toast instead.
 Future<void> _letToastGo(WidgetTester tester) async {
+  await tester.pump();
   await tester.pump(const Duration(seconds: 3));
   await tester.pumpAndSettle();
 }

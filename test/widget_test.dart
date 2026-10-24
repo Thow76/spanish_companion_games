@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
+import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
+import 'package:spanish_companion_games/screens/repair_screen.dart';
 import 'package:spanish_companion_games/widgets/game_card.dart';
 
 Question _q(String id, GameType game) => Question(
@@ -91,14 +93,47 @@ void main() {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text(GameType.fillGap.label));
-    await tester.tap(find.text(GameType.fillGap.label));
+    // Sentence ordering is not built yet, so it still opens the stand-in.
+    await tester.ensureVisible(find.text(GameType.order.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.order.label));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 questions ready'), findsOneWidget);
+    expect(find.text('1 question ready'), findsOneWidget);
     await tester.tap(find.text('Back to games'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Reload questions'), findsOneWidget);
+    // Back on home. (Not the reload button: on a phone the top bar scrolls
+    // away when the list is scrolled down to Sentence ordering.)
+    expect(find.text('1 question ready'), findsNothing);
+    expect(find.text(GameType.order.label), findsOneWidget);
+  });
+
+  testWidgets('Fill the gap opens its game screen', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(GameType.fillGap.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.fillGap.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(FillGapScreen), findsOneWidget);
+  });
+
+  testWidgets('Repair opens its game screen', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(GameType.repair.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.repair.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(RepairScreen), findsOneWidget);
   });
 
   testWidgets('reload calls the source again', (tester) async {

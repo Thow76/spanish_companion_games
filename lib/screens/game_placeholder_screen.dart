@@ -4,11 +4,10 @@
 /// screen can be tested end to end before the games exist. Each game item
 /// replaces the route pushed from `HomeScreen._openGame` with its real screen.
 ///
-/// Repair the sentence (B5) is opened from here for now: B5 was built while
-/// the UI task's PR #12 was changing `home_screen.dart`, so the build task
-/// kept out of that file. Once #12 is merged, a later build item moves the
-/// `GameType.repair` case into `HomeScreen._openGame` next to Choose a
-/// correction.
+/// Repair the sentence (B5) was opened from here while the UI task's PR #12
+/// was changing `home_screen.dart`. Since B14 `HomeScreen._openGame` opens
+/// it directly; the case below is kept so anything still pushing this
+/// screen for Repair gets the real game.
 library;
 
 import 'package:flutter/material.dart';

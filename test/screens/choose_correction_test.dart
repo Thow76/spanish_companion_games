@@ -47,7 +47,12 @@ AnswerState _optionState(WidgetTester tester, String label) =>
     tester.widget<AnswerOption>(find.widgetWithText(AnswerOption, label)).state;
 
 /// Lets the result toast come and go (150 ms up, about 2.5 s, 150 ms down).
+/// Lets the result toast come up and go. The first pump builds the frame
+/// that starts the toast's hide timer; without it the 3 s jump happens
+/// before the timer exists, the toast stays up over the bottom button and
+/// a tap on "Next question" lands on the toast instead.
 Future<void> _letToastGo(WidgetTester tester) async {
+  await tester.pump();
   await tester.pump(const Duration(seconds: 3));
   await tester.pumpAndSettle();
 }
@@ -230,6 +235,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Question 1 of 1'), findsOneWidget);
 
+    // A different tree first, so the screen starts afresh with the new
+    // list instead of keeping the old state.
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(_app([other]));
     await tester.pumpAndSettle();
     expect(find.text('No questions for this game yet.'), findsOneWidget);
