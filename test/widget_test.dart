@@ -95,6 +95,9 @@ void main() {
 
     // Sentence ordering is not built yet, so it still opens the stand-in.
     await tester.ensureVisible(find.text(GameType.order.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
     await tester.tap(find.text(GameType.order.label));
     await tester.pumpAndSettle();
 
@@ -112,6 +115,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text(GameType.fillGap.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
     await tester.tap(find.text(GameType.fillGap.label));
     await tester.pumpAndSettle();
     expect(find.byType(FillGapScreen), findsOneWidget);
@@ -122,6 +128,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text(GameType.repair.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
     await tester.tap(find.text(GameType.repair.label));
     await tester.pumpAndSettle();
     expect(find.byType(RepairScreen), findsOneWidget);
