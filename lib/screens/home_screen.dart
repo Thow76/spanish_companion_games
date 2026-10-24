@@ -22,7 +22,9 @@ import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
 import 'choose_correction_screen.dart';
+import 'fill_gap_screen.dart';
 import 'game_placeholder_screen.dart';
+import 'repair_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
 typedef QuestionSource = Future<ParsedQuestions> Function();
@@ -72,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
           GameType.chooseCorrection => ChooseCorrectionScreen(
             questions: questions,
           ),
+          GameType.repair => RepairScreen(questions: questions),
+          GameType.fillGap => FillGapScreen(questions: questions),
           _ => GamePlaceholderScreen(game: game, questions: questions),
         },
       ),
