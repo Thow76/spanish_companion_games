@@ -106,6 +106,14 @@ void main() {
       expect(_card(tester).fill, 'del');
       expect(_card(tester).gapState, GapState.correct);
       expect(find.byType(ExplanationCard), findsOneWidget);
+      // "del" is not in the rule "depender de", so "You wrote" shows the
+      // sentence with "de" in the gap, struck through.
+      final wrote = tester
+          .widget<ExplanationCard>(find.byType(ExplanationCard))
+          .content
+          .youWrote!;
+      expect(wrote.first.text, 'Depende');
+      expect(wrote.where((p) => p.wrong).map((p) => p.text), ['de']);
       await _letToastGo(tester);
     });
   });

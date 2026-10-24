@@ -200,6 +200,40 @@ class _FillGapScreenState extends State<FillGapScreen> {
     return AnswerState.dimmed;
   }
 
+  /// The explanation after checking. For a wrong answer, "You wrote" puts
+  /// the learner's word in place of the answer in the rule, when the rule
+  /// shows the answer; otherwise (e.g. the answer is "del" and the rule is
+  /// "depender de") it shows the sentence with the learner's word in the
+  /// gap, struck through against the right one, rather than tacking the
+  /// word onto the end of the rule ("depender de de").
+  ExplanationContent _explanation(Question q) {
+    ExplanationContent build({
+      String? chosen,
+      String? typed,
+      String? against,
+    }) => ExplanationContent.build(
+          explanation: q.explanation,
+          rule: q.rule,
+          meaning: q.meaning,
+          answers: q.answers,
+          chosen: chosen,
+          typed: typed,
+          typedAgainst: against,
+        );
+
+    if (_correct) return build();
+    final withChoice = build(chosen: _given);
+    final rule = withChoice.rule;
+    if (rule == null || rule.any((p) => p.kind == RulePartKind.answer)) {
+      return withChoice;
+    }
+    final right = q.answers.isEmpty ? '' : q.answers.first;
+    return build(
+      typed: q.prompt.replaceFirst('___', _given),
+      against: q.prompt.replaceFirst('___', right),
+    );
+  }
+
   List<QuestionMark> get _marks => [
     for (var i = 0; i < _total; i++)
       switch (_results[i]) {
@@ -243,17 +277,7 @@ class _FillGapScreenState extends State<FillGapScreen> {
       gapState = GapState.empty;
     }
 
-    final content = _checked
-        ? ExplanationContent.build(
-            explanation: q.explanation,
-            rule: q.rule,
-            meaning: q.meaning,
-            answers: q.answers,
-            // A typed word is shown in "You wrote" the same way as a
-            // picked option: in place of the answer in the rule.
-            chosen: _correct ? null : _given,
-          )
-        : null;
+    final content = _checked ? _explanation(q) : null;
 
     final rows = <Widget>[
       if (laptop)
