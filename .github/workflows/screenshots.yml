@@ -1,6 +1,7 @@
 # Renders the golden (screenshot) tests on every pull request, commits the
-# PNGs back to the PR branch so they show in the PR's Files changed tab, and
-# also uploads them as an artifact named "screenshots". UI spec section 11.
+# PNGs back to the PR branch, posts (or updates) one PR comment showing them
+# inline, and also uploads them as an artifact named "screenshots".
+# UI spec section 11; U14 (commit) and U15 (comment).
 # They are screenshots for review, not a pass/fail comparison.
 #
 # The commit is pushed with GITHUB_TOKEN, and pushes made with that token do
@@ -15,6 +16,8 @@ on:
 
 permissions:
   contents: write
+  # U15: post and update the screenshots comment on the PR.
+  pull-requests: write
 
 concurrency:
   group: screenshots-${{ github.head_ref || github.ref }}
@@ -77,15 +80,51 @@ jobs:
             exit 1
           fi
 
+      # U15: one comment on the PR with every screenshot shown inline,
+      # grouped by screen, new and changed ones first. The images point at
+      # the PNGs on the branch at the commit that holds them, so an older
+      # comment's images do not change under it. Updated in place on each
+      # push (found by the hidden marker), never a new comment per run.
+      - name: Post screenshots comment
+        id: comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.commit.outputs.result == 'pushed' || steps.commit.outputs.result == 'unchanged')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          sha="$(git rev-parse HEAD)"
+          git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}"
+          git diff --name-status FETCH_HEAD "$sha" -- ':(glob)test/goldens/*.png' > "$RUNNER_TEMP/changes.txt"
+          python3 .github/workflows/screenshots_comment.py \
+            "$REPO" "$sha" "$HEAD_SHA" "$RUNNER_TEMP/changes.txt" "$RUNNER_TEMP/comment.md"
+          id="$(gh api --paginate "repos/${REPO}/issues/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- screenshots-comment -->"))) | .id' | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -F "body=@$RUNNER_TEMP/comment.md" --jq '.html_url' > "$RUNNER_TEMP/url.txt" || failed=1
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -F "body=@$RUNNER_TEMP/comment.md" --jq '.html_url' > "$RUNNER_TEMP/url.txt" || failed=1
+          fi
+          if [ -n "${failed:-}" ]; then
+            echo "::error::Could not post the screenshots comment. If this is a 403, check Settings → Actions → General → Workflow permissions is set to 'Read and write permissions'."
+            exit 1
+          fi
+          echo "url=$(cat "$RUNNER_TEMP/url.txt")" >> "$GITHUB_OUTPUT"
+
       - name: List screenshots
         if: always()
         run: |
           echo "### Screenshots" >> "$GITHUB_STEP_SUMMARY"
           case "${{ steps.commit.outputs.result }}" in
-            pushed)    echo "Committed to the PR branch: see the PR's Files changed tab. Also in the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
+            pushed)    echo "Committed to the PR branch and shown in a comment on the PR. Also in the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
             unchanged) echo "No screenshots changed since the last commit on the PR branch. Also in the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
             *)         echo "Download the \`screenshots\` artifact below." >> "$GITHUB_STEP_SUMMARY" ;;
           esac
+          if [ -n "${{ steps.comment.outputs.url }}" ]; then
+            echo "Screenshots comment: ${{ steps.comment.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
           find test/goldens -name '*.png' -not -path '*/failures/*' | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
