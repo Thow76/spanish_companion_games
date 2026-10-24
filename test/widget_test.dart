@@ -101,7 +101,10 @@ void main() {
     expect(find.text('1 question ready'), findsOneWidget);
     await tester.tap(find.text('Back to games'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Reload questions'), findsOneWidget);
+    // Back on home. (Not the reload button: on a phone the top bar scrolls
+    // away when the list is scrolled down to Sentence ordering.)
+    expect(find.text('1 question ready'), findsNothing);
+    expect(find.text(GameType.order.label), findsOneWidget);
   });
 
   testWidgets('Fill the gap opens its game screen', (tester) async {
