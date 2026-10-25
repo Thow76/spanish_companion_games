@@ -53,9 +53,8 @@ abstract final class AppRadius {
   );
   static const BorderRadius cardAll = BorderRadius.all(Radius.circular(card));
   static const BorderRadius pillAll = BorderRadius.all(Radius.circular(pill));
-  static const BorderRadius markTop = BorderRadius.vertical(
-    top: Radius.circular(mark),
-  );
+  static const Radius markCorner = Radius.circular(mark);
+  static const BorderRadius markTop = BorderRadius.vertical(top: markCorner);
   static const BorderRadius toastTop = BorderRadius.vertical(
     top: Radius.circular(card),
   );

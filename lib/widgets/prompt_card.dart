@@ -202,11 +202,18 @@ class PromptCard extends StatelessWidget {
       spoken.add('marked: ${text.trim()}');
       // One inline box per word, so a long marked span still wraps between
       // words. The space after a word sits inside its box so the highlight
-      // runs on between words on the same line.
-      final words = text.split(' ');
+      // runs on between words on the same line. Only the span's outer top
+      // corners are rounded, so the boxes join into one highlight with no
+      // notch between words.
+      // Spaces at either end of the span stay outside the highlight.
+      final lead = text.length - text.trimLeft().length;
+      final trail = text.length - text.trimRight().length;
+      if (lead > 0) spans.add(TextSpan(text: text.substring(0, lead)));
+      final words = text.trim().split(' ').where((w) => w.isNotEmpty).toList();
       for (var i = 0; i < words.length; i++) {
-        final word = i < words.length - 1 ? '${words[i]} ' : words[i];
-        if (word.isEmpty) continue;
+        final first = i == 0;
+        final last = i == words.length - 1;
+        final word = last ? words[i] : '${words[i]} ';
         spans.add(
           WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
@@ -214,10 +221,17 @@ class PromptCard extends StatelessWidget {
             child: _InlineHighlight(
               fill: AppColors.markFill,
               underline: AppColors.mark,
+              borderRadius: BorderRadius.only(
+                topLeft: first ? AppRadius.markCorner : Radius.zero,
+                topRight: last ? AppRadius.markCorner : Radius.zero,
+              ),
               child: Text(word, style: markedStyle),
             ),
           ),
         );
+      }
+      if (trail > 0 && words.isNotEmpty) {
+        spans.add(TextSpan(text: text.substring(text.length - trail)));
       }
     }
     return Semantics(
@@ -286,12 +300,17 @@ class _InlineHighlight extends StatelessWidget {
     required this.underline,
     required this.child,
     this.minWidth = 0,
+    this.borderRadius = AppRadius.markTop,
   });
 
   final Color fill;
   final Color underline;
   final Widget child;
   final double minWidth;
+
+  /// Top corners only; a marked span of several words rounds only its
+  /// outer corners.
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -303,7 +322,7 @@ class _InlineHighlight extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: fill,
-            borderRadius: AppRadius.markTop,
+            borderRadius: borderRadius,
           ),
           child: CustomPaint(
             foregroundPainter: _UnderlinePainter(underline),
