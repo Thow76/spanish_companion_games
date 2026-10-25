@@ -59,6 +59,18 @@ void main() {
       expect(c.spokenYouWrote, 'pensar de, wrong');
     });
 
+    test('a choice not in the pattern is shown on its own', () {
+      final c = ExplanationContent.build(
+        explanation:
+            'ver a + person = the personal a goes before a person who is the '
+            'object',
+        answers: const ['ver a mis'],
+        chosen: 'ver a los',
+      );
+      expect(c.youWrote, [(text: 'ver a los', wrong: true)]);
+      expect(c.spokenYouWrote, 'ver a los, wrong');
+    });
+
     test('rule and meaning fields win over the explanation', () {
       final c = ExplanationContent.build(
         explanation: 'Anything at all.',

@@ -203,23 +203,25 @@ class ExplanationContent {
   }
 
   /// "pensar ~~de~~": the Spanish words of the pattern with the learner's
-  /// choice in place of the answer.
+  /// choice in place of the answer. If the answer is not in the pattern
+  /// (rule "ver a + person", answer "ver a mis"), just the choice, struck
+  /// through, rather than tacking it onto the pattern ("ver a ver a los").
   static List<WrotePart> _youWroteChoice(List<RulePart> parts, String chosen) {
+    if (!parts.any((p) => p.kind == RulePartKind.answer)) {
+      return [(text: chosen, wrong: true)];
+    }
     final out = <WrotePart>[];
-    var replaced = false;
     for (final part in parts) {
       switch (part.kind) {
         case RulePartKind.word:
           out.add((text: part.text, wrong: false));
         case RulePartKind.answer:
           out.add((text: chosen, wrong: true));
-          replaced = true;
         case RulePartKind.joiner:
         case RulePartKind.placeholder:
           break;
       }
     }
-    if (!replaced) out.add((text: chosen, wrong: true));
     return out;
   }
 
