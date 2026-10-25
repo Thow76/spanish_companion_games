@@ -13,6 +13,9 @@
 ///   `choose-correction_checked-right_<size>`: right answer.
 /// - `choose-correction_checked-wrong-toast_<phone|landscape>` and
 ///   `choose-correction_checked-wrong_<size>`: wrong answer.
+/// - `choose-correction_missing-word-checked-wrong-toast_<phone|landscape>`
+///   and `choose-correction_missing-word-checked-wrong_<size>`: the
+///   missing-word question answered wrong (two marked words, U5).
 @Tags(['golden'])
 library;
 
@@ -145,6 +148,17 @@ void main() {
         matchesGoldenFile(goldenName(_screen, 'missing-word', size)),
       );
     });
+
+    // A marked span of two words, after checking: the joined highlight
+    // before, and the corrected sentence with the added word (U5).
+    testWidgets(
+      'choose a correction missing word checked wrong, ${size.name}',
+      (tester) async {
+        await start(tester, size, [_verAMis(), _pensar()]);
+        await choose(tester, 'ver a los');
+        await check(tester, size, 'missing-word-checked-wrong');
+      },
+    );
 
     testWidgets('choose a correction chosen, ${size.name}', (tester) async {
       await start(tester, size, [_pensar(), _cansada(), _aplicar()]);

@@ -87,9 +87,10 @@ enum QuestionMark {
   upcoming,
 }
 
-/// SessionPanel (laptop only): "This session" and the score, then one row
-/// per question. Before checking, a dashed placeholder under it reads "The
-/// explanation appears here after you check." ([showPlaceholder]).
+/// SessionPanel (laptop only): "This session" and the score (from the first
+/// check on), then one row per question. Before checking, a dashed
+/// placeholder under it reads "The explanation appears here after you
+/// check." ([showPlaceholder]).
 class SessionPanel extends StatelessWidget {
   const SessionPanel({
     super.key,
@@ -137,7 +138,10 @@ class SessionPanel extends StatelessWidget {
                       child: Text('This session', style: type.phaseHeading),
                     ),
                   ),
-                  Text('$_score of $_answered correct', style: type.caption),
+                  // The score shows once something has been checked, so
+                  // it never reads "0 of 0 correct".
+                  if (_answered > 0)
+                    Text('$_score of $_answered correct', style: type.caption),
                 ],
               ),
               const SizedBox(height: AppSpacing.s12),

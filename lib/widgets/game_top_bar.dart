@@ -168,10 +168,17 @@ class _TopBarAction extends StatelessWidget {
         // Its own Material, so the ink does not depend on the screen's.
         child: Material(
           type: MaterialType.transparency,
+          // A text link, no box (spec section 6): no ripple, highlight or
+          // hover fill. Keyboard focus shows as the FocusRing only.
           child: InkWell(
             onTap: onPressed,
             focusNode: focusNode,
             borderRadius: AppRadius.controlAll,
+            splashFactory: NoSplash.splashFactory,
+            splashColor: AppColors.transparent,
+            highlightColor: AppColors.transparent,
+            hoverColor: AppColors.transparent,
+            focusColor: AppColors.transparent,
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 minHeight: AppSizes.landscapeTopBar,
