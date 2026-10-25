@@ -24,6 +24,7 @@ import '../widgets/widgets.dart';
 import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
 import 'game_placeholder_screen.dart';
+import 'order_screen.dart';
 import 'repair_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           GameType.repair => RepairScreen(questions: questions),
           GameType.fillGap => FillGapScreen(questions: questions),
+          GameType.order => OrderScreen(questions: questions),
           _ => GamePlaceholderScreen(game: game, questions: questions),
         },
       ),

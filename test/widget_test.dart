@@ -5,6 +5,7 @@ import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
+import 'package:spanish_companion_games/screens/order_screen.dart';
 import 'package:spanish_companion_games/screens/repair_screen.dart';
 import 'package:spanish_companion_games/widgets/game_card.dart';
 
@@ -89,25 +90,17 @@ void main() {
     expect(tester.widget<InkWell>(ink).onTap, isNull);
   });
 
-  testWidgets('tapping a game opens its screen', (tester) async {
+  testWidgets('Sentence ordering opens its game screen', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    // Sentence ordering is not built yet, so it still opens the stand-in.
     await tester.ensureVisible(find.text(GameType.order.label));
     // ensureVisible only moves the scroll position; pump so the tap
     // uses the new layout, not the old (off-screen) one.
     await tester.pumpAndSettle();
     await tester.tap(find.text(GameType.order.label));
     await tester.pumpAndSettle();
-
-    expect(find.text('1 question ready'), findsOneWidget);
-    await tester.tap(find.text('Back to games'));
-    await tester.pumpAndSettle();
-    // Back on home. (Not the reload button: on a phone the top bar scrolls
-    // away when the list is scrolled down to Sentence ordering.)
-    expect(find.text('1 question ready'), findsNothing);
-    expect(find.text(GameType.order.label), findsOneWidget);
+    expect(find.byType(OrderScreen), findsOneWidget);
   });
 
   testWidgets('Fill the gap opens its game screen', (tester) async {
