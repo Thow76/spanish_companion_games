@@ -226,7 +226,13 @@ class _RepairScreenState extends State<RepairScreen> {
             explanation: q.explanation,
             rule: q.rule,
             meaning: q.meaning,
-            answers: q.answers,
+            // The answers are whole sentences, so the rule's answer chip
+            // (spec section 6) comes from the words that changed.
+            answers: [
+              if (corrected != null)
+                ...SentenceText.changedRuns(corrected, q.promptText),
+              ...q.answers,
+            ],
             typed: _correct ? null : RepairScreen.learnerSentence(q, _typed),
             typedAgainst: _correct ? null : corrected,
           )

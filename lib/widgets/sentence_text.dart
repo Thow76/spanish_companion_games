@@ -100,4 +100,44 @@ abstract final class SentenceText {
     final changed = diff.where((w) => w.changed).length;
     return changed > 0 && changed * 2 <= diff.length;
   }
+
+  /// The words that changed in [target] compared with [other], for finding
+  /// the answer chip in a rule when the answer is a whole sentence (Repair,
+  /// Spot the error). Each run of neighbouring changed words comes first
+  /// ("me llamo"), then each changed word on its own ("llamo"), without
+  /// repeats (case and edge punctuation ignored).
+  static List<String> changedRuns(String target, String other) {
+    final diff = SentenceText.diff(target, other);
+    final runs = <List<String>>[];
+    var current = <String>[];
+    for (final w in diff) {
+      if (w.changed) {
+        current.add(w.word);
+      } else if (current.isNotEmpty) {
+        runs.add(current);
+        current = <String>[];
+      }
+    }
+    if (current.isNotEmpty) runs.add(current);
+
+    final seen = <String>{};
+    final out = <String>[];
+    void add(List<String> words) {
+      final text = words.join(' ');
+      final key = words.map(_key).join(' ');
+      if (key.trim().isEmpty || !seen.add(key)) return;
+      out.add(text);
+    }
+
+    for (final run in runs) {
+      add(run);
+    }
+    for (final run in runs) {
+      if (run.length < 2) continue;
+      for (final word in run) {
+        add([word]);
+      }
+    }
+    return out;
+  }
 }

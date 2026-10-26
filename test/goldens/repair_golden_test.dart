@@ -9,6 +9,10 @@
 /// - `repair_edited_<size>`: the field changed, before checking.
 /// - `repair_checked-right-toast_<phone|landscape>`, `repair_checked-right_<size>`
 /// - `repair_checked-wrong-toast_<phone|landscape>`, `repair_checked-wrong_<size>`
+/// - `repair_answer-chip-checked-right-toast_<phone|landscape>`,
+///   `repair_answer-chip-checked-right_<size>` (U7): the "me gustan" question,
+///   whose rule holds the changed word, so the rule shows the mint answer
+///   chip.
 @Tags(['golden'])
 library;
 
@@ -152,6 +156,12 @@ void main() {
         'El problema es muy difícil y las gentes están cansadas.',
       );
       await check(tester, size, 'checked-wrong');
+    });
+
+    testWidgets('repair answer chip, ${size.name}', (tester) async {
+      await start(tester, size, [_gusta(), _sentido()]);
+      await type(tester, 'Me gustan los libros y me gustan las películas.');
+      await check(tester, size, 'answer-chip-checked-right');
     });
   }
 }
