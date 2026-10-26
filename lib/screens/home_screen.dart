@@ -24,6 +24,7 @@ import '../widgets/widgets.dart';
 import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
 import 'game_placeholder_screen.dart';
+import 'match_screen.dart';
 import 'order_screen.dart';
 import 'repair_screen.dart';
 
@@ -78,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
           GameType.repair => RepairScreen(questions: questions),
           GameType.fillGap => FillGapScreen(questions: questions),
           GameType.order => OrderScreen(questions: questions),
+          GameType.match => MatchScreen(questions: questions),
           _ => GamePlaceholderScreen(game: game, questions: questions),
         },
       ),

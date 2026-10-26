@@ -5,6 +5,7 @@ import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
+import 'package:spanish_companion_games/screens/match_screen.dart';
 import 'package:spanish_companion_games/screens/order_screen.dart';
 import 'package:spanish_companion_games/screens/repair_screen.dart';
 import 'package:spanish_companion_games/widgets/game_card.dart';
@@ -101,6 +102,33 @@ void main() {
     await tester.tap(find.text(GameType.order.label));
     await tester.pumpAndSettle();
     expect(find.byType(OrderScreen), findsOneWidget);
+  });
+
+  testWidgets('Matching opens its game screen', (tester) async {
+    final withMatch = ParsedQuestions(
+      questions: [
+        ..._sample().questions,
+        Question(
+          id: 'm',
+          game: GameType.match,
+          category: 'test',
+          type: QuestionType.grammar,
+          prompt: 'Match the verb to its preposition',
+          pairs: const [MatchPair('pensar', 'en'), MatchPair('depender', 'de')],
+        ),
+      ],
+      problems: const [],
+    );
+    await tester.pumpWidget(_app(() async => withMatch));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(GameType.match.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.match.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(MatchScreen), findsOneWidget);
   });
 
   testWidgets('Fill the gap opens its game screen', (tester) async {
