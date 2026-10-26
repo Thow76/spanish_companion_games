@@ -37,6 +37,39 @@ void main() {
       expect(diff.where((w) => w.changed).map((w) => w.word), ['gustan']);
       expect(SentenceText.isClear(diff), isTrue);
     });
+
+    test('changedRuns gives each changed run, then its words, once', () {
+      expect(
+        SentenceText.changedRuns(
+          'Me gustan los libros y me gustan las películas.',
+          'Me gusta los libros y me gusta las películas.',
+        ),
+        ['gustan'],
+      );
+      expect(
+        SentenceText.changedRuns(
+          'El problema es muy difícil y la gente está cansada.',
+          'El problema es muy difícil y las gentes están cansadas.',
+        ),
+        ['la gente está cansada.', 'la', 'gente', 'está', 'cansada.'],
+      );
+      expect(SentenceText.changedRuns('Igual.', 'Igual.'), isEmpty);
+    });
+
+    test('a changed word in the rule becomes the answer chip', () {
+      final c = ExplanationContent.build(
+        explanation:
+            'me gustan + plural noun = gustar agrees with the thing liked',
+        answers: SentenceText.changedRuns(
+          'Me gustan los libros y me gustan las películas.',
+          'Me gusta los libros y me gusta las películas.',
+        ),
+      );
+      expect(
+        c.rule!.where((p) => p.kind == RulePartKind.answer).map((p) => p.text),
+        ['gustan'],
+      );
+    });
   });
 
   group('ExplanationContent', () {
