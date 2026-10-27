@@ -72,6 +72,12 @@ abstract final class AppStroke {
   /// Focus ring width and its offset from the element (section 10).
   static const double focusRing = 2;
   static const double focusOffset = 2;
+
+  /// The strike-through on a wrong word in "You wrote" (section 6). Text
+  /// decoration thickness is a multiple of the font's own line (about 1px
+  /// at 13-15px), so this is roughly 2px, as on the mock-ups. At 1px the
+  /// line was hard to see in phone landscape.
+  static const double strikeMultiple = 2;
 }
 
 /// Minimum sizes of touch targets and controls.

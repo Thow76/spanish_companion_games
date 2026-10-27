@@ -28,7 +28,8 @@ enum GapState {
   /// A word picked, not yet checked: shown in accent.
   chosen,
 
-  /// After checking: the correct word, in `correct`.
+  /// After checking: the correct word, in `correct` on a mint 14% fill
+  /// with a mint underline.
   correct,
 }
 
@@ -269,7 +270,11 @@ class PromptCard extends StatelessWidget {
                 alignment: PlaceholderAlignment.baseline,
                 baseline: TextBaseline.alphabetic,
                 child: _InlineHighlight(
-                  fill: AppColors.accent12,
+                  // After checking the slot is mint throughout (fill,
+                  // underline and word), as on the mock-ups.
+                  fill: gapState == GapState.correct
+                      ? AppColors.correctFill
+                      : AppColors.accent12,
                   underline: gapState == GapState.correct
                       ? AppColors.correct
                       : AppColors.accent,

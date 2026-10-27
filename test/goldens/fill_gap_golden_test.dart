@@ -9,6 +9,10 @@
 /// - `fill-gap_typed-empty_<size>`: typed question, empty field.
 /// - `fill-gap_typed_<size>`: a word typed, before checking.
 /// - `fill-gap_typed-wrong[-toast]_<size>`: a wrong typed word, checked.
+/// - `fill-gap_typed-right[-toast]_<size>`: the right typed word, checked
+///   (U11: the gap slot turns mint).
+/// - `fill-gap_typed-long_<size>`: a long word typed, before checking, to
+///   show the gap slot growing and the sentence wrapping (U11).
 @Tags(['golden'])
 library;
 
@@ -144,6 +148,18 @@ void main() {
       await start(tester, size, [_espero(), _depende()]);
       await type(tester, 'hace');
       await check(tester, size, 'typed-wrong');
+    });
+
+    testWidgets('fill gap typed right, ${size.name}', (tester) async {
+      await start(tester, size, [_espero(), _depende()]);
+      await type(tester, 'haga');
+      await check(tester, size, 'typed-right');
+    });
+
+    testWidgets('fill gap typed long, ${size.name}', (tester) async {
+      await start(tester, size, [_espero(), _depende()]);
+      await type(tester, 'desafortunadamente hiciera');
+      await shot(tester, size, 'typed-long');
     });
   }
 }
