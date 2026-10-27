@@ -317,6 +317,7 @@ class _Lines extends StatelessWidget {
             color: AppColors.wrong,
             decoration: TextDecoration.lineThrough,
             decorationColor: AppColors.wrong,
+            decorationThickness: AppStroke.strikeMultiple,
           );
       rows.add(
         Semantics(
