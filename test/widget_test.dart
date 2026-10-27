@@ -8,6 +8,7 @@ import 'package:spanish_companion_games/screens/home_screen.dart';
 import 'package:spanish_companion_games/screens/match_screen.dart';
 import 'package:spanish_companion_games/screens/order_screen.dart';
 import 'package:spanish_companion_games/screens/repair_screen.dart';
+import 'package:spanish_companion_games/screens/spot_error_screen.dart';
 import 'package:spanish_companion_games/widgets/game_card.dart';
 
 Question _q(String id, GameType game) => Question(
@@ -155,6 +156,33 @@ void main() {
     await tester.tap(find.text(GameType.repair.label));
     await tester.pumpAndSettle();
     expect(find.byType(RepairScreen), findsOneWidget);
+  });
+
+  testWidgets('Spot the error opens its game screen', (tester) async {
+    final withSpotError = ParsedQuestions(
+      questions: [
+        ..._sample().questions,
+        Question(
+          id: 's',
+          game: GameType.spotError,
+          category: 'test',
+          type: QuestionType.grammar,
+          prompt: 'Depende del tiempo.',
+          answers: const ['Depende del tiempo.'],
+        ),
+      ],
+      problems: const [],
+    );
+    await tester.pumpWidget(_app(() async => withSpotError));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text(GameType.spotError.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.spotError.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(SpotErrorScreen), findsOneWidget);
   });
 
   testWidgets('reload calls the source again', (tester) async {

@@ -23,10 +23,10 @@ import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
 import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
-import 'game_placeholder_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
 import 'repair_screen.dart';
+import 'spot_error_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
 typedef QuestionSource = Future<ParsedQuestions> Function();
@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => switch (game) {
-          // The games built so far; the rest still open the placeholder.
+          // Every game now has its own screen (B15 added the last).
           GameType.chooseCorrection => ChooseCorrectionScreen(
             questions: questions,
           ),
@@ -80,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
           GameType.fillGap => FillGapScreen(questions: questions),
           GameType.order => OrderScreen(questions: questions),
           GameType.match => MatchScreen(questions: questions),
-          _ => GamePlaceholderScreen(game: game, questions: questions),
+          GameType.spotError => SpotErrorScreen(questions: questions),
         },
       ),
     );
