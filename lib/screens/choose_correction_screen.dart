@@ -10,20 +10,19 @@
 /// only decides what they show and when (UI spec sections 5, 6, 8 and 10).
 ///
 /// Answer checking uses the shared rule in `lib/models/answer_check.dart`.
-/// The end-of-session summary is B7's; until then [ChooseCorrectionScreen]
-/// ends with a short stand-in ([_SessionEndView]) that shows the score and
-/// offers "Play again".
+/// The session ends with the summary ([SessionSummaryView], B7).
 library;
 
 import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
-import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
+import 'session_summary_view.dart';
 
 /// Plays a session of Choose a correction questions, in the order given.
 ///
@@ -31,9 +30,18 @@ import '../widgets/widgets.dart';
 /// (the parser guarantees that for the sample file and Drive file); any
 /// other question is skipped.
 class ChooseCorrectionScreen extends StatefulWidget {
-  const ChooseCorrectionScreen({super.key, required this.questions});
+  const ChooseCorrectionScreen({
+    super.key,
+    required this.questions,
+    this.session,
+  });
 
   final List<Question> questions;
+
+  /// The app session's tally (B7), shared by every game and kept by the
+  /// home screen. Each checked question is recorded in it. Null (tests)
+  /// means the summary counts this round only.
+  final SessionTally? session;
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction =
@@ -96,7 +104,6 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
-  int get _score => _results.where((r) => r == true).length;
 
   void _choose(String option) {
     if (_checked) return;
@@ -111,6 +118,7 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
       _checked = true;
       _correct = correct;
       _results[_index] = correct;
+      widget.session?.record(_question, correct);
       _toastResult = correct;
       _toastId++;
     });
@@ -186,9 +194,11 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
       return _EmptyView(onBack: _goHome);
     }
     if (_finished) {
-      return _SessionEndView(
-        score: _score,
-        total: _total,
+      return SessionSummaryView(
+        game: GameType.chooseCorrection,
+        questions: _questions,
+        results: _results,
+        session: widget.session,
         onPlayAgain: _playAgain,
         onBack: _goHome,
       );
@@ -308,60 +318,6 @@ class _EmptyView extends StatelessWidget {
       primaryButton: PrimaryButton(label: 'Back to games', onPressed: onBack),
       children: [
         Text('No questions for this game yet.', style: type.body),
-      ],
-    );
-  }
-}
-
-/// Stand-in for the end-of-session summary (B7): the score for the session
-/// and "Play again". B7 replaces it with the full summary (score split by
-/// phase, the questions got wrong with their explanations).
-class _SessionEndView extends StatelessWidget {
-  const _SessionEndView({
-    required this.score,
-    required this.total,
-    required this.onPlayAgain,
-    required this.onBack,
-  });
-
-  final int score;
-  final int total;
-  final VoidCallback onPlayAgain;
-  final VoidCallback onBack;
-
-  static const String title = 'Session complete';
-
-  static String scoreText(int score, int total) =>
-      'You got $score of $total right.';
-
-  @override
-  Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return GameFrame(
-      topBar: GameTopBar(
-        title: GameType.chooseCorrection.label,
-        onBack: onBack,
-        actionLabel: 'Play again',
-        onAction: onPlayAgain,
-      ),
-      primaryButton: PrimaryButton(
-        label: 'Play again',
-        onPressed: onPlayAgain,
-        trailingIcon: Icons.refresh_rounded,
-      ),
-      children: [
-        Semantics(
-          header: true,
-          child: Text(title, style: type.cardTitle),
-        ),
-        Text(scoreText(score, total), style: type.body),
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.s8),
-          child: Text(
-            'The full summary comes in a later step.',
-            style: type.caption,
-          ),
-        ),
       ],
     );
   }

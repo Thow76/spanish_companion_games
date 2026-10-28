@@ -11,28 +11,38 @@
 ///
 /// The mode is decided per question, so one session can mix both. Checking
 /// uses [isAcceptedAnswer] (trim, ignore case and final punctuation, accents
-/// must match). The end-of-session summary is B7's; until then the screen
-/// ends with the same short stand-in as B3 and B5 ([_SessionEndView]).
+/// must match). The session ends with the summary
+/// ([SessionSummaryView], B7).
 library;
 
 import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
-import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
+import 'session_summary_view.dart';
 
 /// Plays a session of Fill the gap questions, in the order given.
 ///
 /// Questions from other games, and fill-the-gap questions without a `___`
 /// (the parser already rejects those), are skipped.
 class FillGapScreen extends StatefulWidget {
-  const FillGapScreen({super.key, required this.questions});
+  const FillGapScreen({
+    super.key,
+    required this.questions,
+    this.session,
+  });
 
   final List<Question> questions;
+
+  /// The app session's tally (B7), shared by every game and kept by the
+  /// home screen. Each checked question is recorded in it. Null (tests)
+  /// means the summary counts this round only.
+  final SessionTally? session;
 
   /// Instructions above the prompt card (spec section 8).
   static const String chooseInstruction = 'Choose the missing word';
@@ -103,7 +113,6 @@ class _FillGapScreenState extends State<FillGapScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
-  int get _score => _results.where((r) => r == true).length;
   bool get _optionMode => FillGapScreen.hasOptionMode(_question);
 
   /// What the learner has given so far: the option picked, or the typed
@@ -136,6 +145,7 @@ class _FillGapScreenState extends State<FillGapScreen> {
       _correct = correct;
       _given = given;
       _results[_index] = correct;
+      widget.session?.record(_question, correct);
       _toastResult = correct;
       _toastId++;
     });
@@ -249,9 +259,11 @@ class _FillGapScreenState extends State<FillGapScreen> {
       return _EmptyView(onBack: _goHome);
     }
     if (_finished) {
-      return _SessionEndView(
-        score: _score,
-        total: _total,
+      return SessionSummaryView(
+        game: GameType.fillGap,
+        questions: _questions,
+        results: _results,
+        session: widget.session,
         onPlayAgain: _playAgain,
         onBack: _goHome,
       );
@@ -382,53 +394,6 @@ class _EmptyView extends StatelessWidget {
       topBar: GameTopBar(title: GameType.fillGap.label, onBack: onBack),
       primaryButton: PrimaryButton(label: 'Back to games', onPressed: onBack),
       children: [Text('No questions for this game yet.', style: type.body)],
-    );
-  }
-}
-
-/// Stand-in for the end-of-session summary (B7), the same as B3's and B5's.
-class _SessionEndView extends StatelessWidget {
-  const _SessionEndView({
-    required this.score,
-    required this.total,
-    required this.onPlayAgain,
-    required this.onBack,
-  });
-
-  final int score;
-  final int total;
-  final VoidCallback onPlayAgain;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return GameFrame(
-      topBar: GameTopBar(
-        title: GameType.fillGap.label,
-        onBack: onBack,
-        actionLabel: 'Play again',
-        onAction: onPlayAgain,
-      ),
-      primaryButton: PrimaryButton(
-        label: 'Play again',
-        onPressed: onPlayAgain,
-        trailingIcon: Icons.refresh_rounded,
-      ),
-      children: [
-        Semantics(
-          header: true,
-          child: Text('Session complete', style: type.cardTitle),
-        ),
-        Text('You got $score of $total right.', style: type.body),
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.s8),
-          child: Text(
-            'The full summary comes in a later step.',
-            style: type.caption,
-          ),
-        ),
-      ],
     );
   }
 }

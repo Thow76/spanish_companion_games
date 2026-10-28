@@ -23,9 +23,8 @@
 /// The left column keeps the file's order; the right column is shuffled so
 /// it does not start lined up. Pairs are checked with [isMatchingPair]
 /// (trim, ignore case and final punctuation, accents must match), so two
-/// tiles with the same text are interchangeable. The end-of-session
-/// summary is B7's; until then the screen ends with the same short
-/// stand-in as the other games.
+/// tiles with the same text are interchangeable. The session ends
+/// with the summary ([SessionSummaryView], B7).
 library;
 
 import 'dart:async';
@@ -35,11 +34,13 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
+import 'session_summary_view.dart';
 
 /// Plays a session of Matching questions, in the order given.
 ///
@@ -47,9 +48,19 @@ import '../widgets/widgets.dart';
 /// pairs, are skipped. [random] shuffles the right column; tests pass a
 /// seeded one so the order is the same every run.
 class MatchScreen extends StatefulWidget {
-  const MatchScreen({super.key, required this.questions, this.random});
+  const MatchScreen({
+    super.key,
+    required this.questions,
+    this.random,
+    this.session,
+  });
 
   final List<Question> questions;
+
+  /// The app session's tally (B7), shared by every game and kept by the
+  /// home screen. Each checked question is recorded in it. Null (tests)
+  /// means the summary counts this round only.
+  final SessionTally? session;
   final Random? random;
 
   /// How long a wrong pairing shows coral before both tiles go back.
@@ -153,7 +164,6 @@ class _MatchScreenState extends State<MatchScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
-  int get _score => _results.where((r) => r == true).length;
   bool get _correct => _wrongTries.isEmpty;
 
   /// Ends a wrong flash early (the next tap does not wait for it).
@@ -209,6 +219,7 @@ class _MatchScreenState extends State<MatchScreen> {
   void _finishQuestion() {
     _done = true;
     _results[_index] = _correct;
+    widget.session?.record(_question, _correct);
     _toastResult = _correct;
     _toastId++;
     // Portrait waits for the toast to go (see [_onToastHidden]); landscape
@@ -367,9 +378,11 @@ class _MatchScreenState extends State<MatchScreen> {
       return _EmptyView(onBack: _goHome);
     }
     if (_finished) {
-      return _SessionEndView(
-        score: _score,
-        total: _total,
+      return SessionSummaryView(
+        game: GameType.match,
+        questions: _questions,
+        results: _results,
+        session: widget.session,
         onPlayAgain: _playAgain,
         onBack: _goHome,
       );
@@ -447,54 +460,6 @@ class _EmptyView extends StatelessWidget {
       topBar: GameTopBar(title: GameType.match.label, onBack: onBack),
       primaryButton: PrimaryButton(label: 'Back to games', onPressed: onBack),
       children: [Text('No questions for this game yet.', style: type.body)],
-    );
-  }
-}
-
-/// Stand-in for the end-of-session summary (B7), the same as B3's, B5's,
-/// B14's and B4's.
-class _SessionEndView extends StatelessWidget {
-  const _SessionEndView({
-    required this.score,
-    required this.total,
-    required this.onPlayAgain,
-    required this.onBack,
-  });
-
-  final int score;
-  final int total;
-  final VoidCallback onPlayAgain;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return GameFrame(
-      topBar: GameTopBar(
-        title: GameType.match.label,
-        onBack: onBack,
-        actionLabel: 'Play again',
-        onAction: onPlayAgain,
-      ),
-      primaryButton: PrimaryButton(
-        label: 'Play again',
-        onPressed: onPlayAgain,
-        trailingIcon: Icons.refresh_rounded,
-      ),
-      children: [
-        Semantics(
-          header: true,
-          child: Text('Session complete', style: type.cardTitle),
-        ),
-        Text('You got $score of $total right.', style: type.body),
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.s8),
-          child: Text(
-            'The full summary comes in a later step.',
-            style: type.caption,
-          ),
-        ),
-      ],
     );
   }
 }
