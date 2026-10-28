@@ -93,6 +93,9 @@ abstract final class AppSizes {
   static const double optionLandscape = 48;
   static const double optionLaptop = 64;
 
+  /// Word chips in Sentence ordering (section 6): 48 high at every size.
+  static const double wordChip = 48;
+
   /// Primary button height.
   static const double primaryButton = 52;
 
@@ -184,6 +187,13 @@ abstract final class AppInsets {
     horizontal: 20,
   );
   static const EdgeInsets promptLaptop = EdgeInsets.all(28);
+
+  /// Sentence ordering word chip: 16 sides, 8 top and bottom (the chip is
+  /// at least [AppSizes.wordChip] high; the label is centred in it).
+  static const EdgeInsets wordChip = EdgeInsets.symmetric(
+    vertical: 8,
+    horizontal: 16,
+  );
 
   /// Chip padding: 4 top and bottom, 8 sides.
   static const EdgeInsets chip = EdgeInsets.symmetric(

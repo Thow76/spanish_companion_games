@@ -23,3 +23,4 @@ export 'result_toast.dart';
 export 'screen_frames.dart';
 export 'sentence_text.dart';
 export 'spot_error_choice.dart';
+export 'word_chip.dart';

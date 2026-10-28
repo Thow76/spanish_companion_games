@@ -9,10 +9,10 @@
 /// ExplanationCard, PrimaryButton, the result toast (phones) and the
 /// Session and Feedback panels (laptop). UI spec sections 5, 6, 8 and 10.
 ///
-/// The word chips use [AnswerOption] (there is no shared word-chip widget
-/// yet): a word still to place is `resting`, a placed word `selected`.
-/// Tapping a word adds it to the end of the sentence; tapping a placed
-/// word takes it out again. Check is on once every word is placed.
+/// The words are [WordChip]s (U6, spec section 6): a word still to place is
+/// `toPlace`, a placed word `placed`, and after checking every chip is
+/// `done`. Tapping a word adds it to the end of the sentence; tapping a
+/// placed word takes it out again. Check is on once every word is placed.
 ///
 /// The words are the question's `prompt` split on spaces, punctuation kept
 /// on its word, then shuffled so they never start in the right order.
@@ -225,14 +225,14 @@ class _OrderScreenState extends State<OrderScreen> {
 
   void _goHome() => Navigator.of(context).maybePop();
 
-  /// Before checking: placed words `selected`, the rest `resting`. After
-  /// checking every word is `dimmed` and disabled; the result is on the
+  /// Before checking: placed words `placed`, the rest `toPlace`. After
+  /// checking every word is `done` and disabled; the result is on the
   /// prompt card, the explanation and the toast or feedback panel.
-  AnswerState _stateOf(int position) {
-    if (_checked) return AnswerState.dimmed;
+  WordChipState _stateOf(int position) {
+    if (_checked) return WordChipState.done;
     return _placed.contains(position)
-        ? AnswerState.selected
-        : AnswerState.resting;
+        ? WordChipState.placed
+        : WordChipState.toPlace;
   }
 
   /// The explanation after checking. For a wrong answer, "You wrote" shows
@@ -303,7 +303,7 @@ class _OrderScreenState extends State<OrderScreen> {
         runSpacing: AppSpacing.s8,
         children: [
           for (var i = 0; i < _words.length; i++)
-            AnswerOption(
+            WordChip(
               key: ValueKey('order-word-${q.id}-$i'),
               label: _words[i],
               state: _stateOf(i),
