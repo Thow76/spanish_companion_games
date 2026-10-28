@@ -2,7 +2,7 @@
 /// been checked and "See results" pressed.
 ///
 /// - "Session complete" and this round's score ("You got 2 of 3 right.").
-/// - "This session": the score for everything answered since the app was
+/// - "All games so far": the score for everything answered since the app was
 ///   opened, split into "New corrections" (phase 1) and "Recall" (phase 2),
 ///   from the shared [SessionTally].
 /// - "To look at again": each question got wrong this round, with the
@@ -55,7 +55,7 @@ class SessionSummaryView extends StatelessWidget {
   final SessionTally? session;
 
   static const String title = 'Session complete';
-  static const String sessionHeading = 'This session';
+  static const String sessionHeading = 'All games so far';
   static const String wrongHeading = 'To look at again';
   static const String wrongCaption =
       'The questions you got wrong this round, with the answer.';
@@ -129,7 +129,7 @@ class SessionSummaryView extends StatelessWidget {
   }
 }
 
-/// "This session" with one line per phase: "New corrections  2 of 3 right",
+/// "All games so far" with one line per phase: "New corrections  2 of 3 right",
 /// "Recall  None yet".
 class _SessionScores extends StatelessWidget {
   const _SessionScores({required this.tally});
