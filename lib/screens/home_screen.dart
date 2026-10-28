@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import '../data/question_loader.dart';
 import '../models/question.dart';
 import '../models/question_parser.dart';
+import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
@@ -56,6 +57,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<ParsedQuestions> _future;
 
+  /// Every question checked since the app was opened, across the games
+  /// (B7). Kept when the questions are reloaded.
+  final SessionTally _session = SessionTally();
+
   @override
   void initState() {
     super.initState();
@@ -72,15 +77,31 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => switch (game) {
-          // Every game now has its own screen (B15 added the last).
+          // Every game has its own screen; each records its results in the
+          // session tally for the end-of-session summary (B7).
           GameType.chooseCorrection => ChooseCorrectionScreen(
             questions: questions,
+            session: _session,
           ),
-          GameType.repair => RepairScreen(questions: questions),
-          GameType.fillGap => FillGapScreen(questions: questions),
+          GameType.repair => RepairScreen(
+            questions: questions,
+            session: _session,
+          ),
+          GameType.fillGap => FillGapScreen(
+            questions: questions,
+            session: _session,
+          ),
+          // Sentence ordering joins the tally once UI PR #23 (which changes
+          // order_screen.dart) is merged; until then it keeps its stand-in.
           GameType.order => OrderScreen(questions: questions),
-          GameType.match => MatchScreen(questions: questions),
-          GameType.spotError => SpotErrorScreen(questions: questions),
+          GameType.match => MatchScreen(
+            questions: questions,
+            session: _session,
+          ),
+          GameType.spotError => SpotErrorScreen(
+            questions: questions,
+            session: _session,
+          ),
         },
       ),
     );
