@@ -7,6 +7,10 @@
 /// - `order_building_<size>`: three words placed.
 /// - `order_placed_<size>`: every word placed, before checking.
 /// - `order_checked-right[-toast]_<size>`, `order_checked-wrong[-toast]_<size>`
+/// - `order_long_<size>`: a 13-word sentence, half placed, to show the
+///   chips wrapping (U6).
+/// - `order_long-320_phone`: the same at 320×640, the narrowest width
+///   (spec section 10: nothing scrolls sideways).
 ///
 /// The words are shuffled with a seeded [Random], so the screenshots are
 /// the same every run.
@@ -55,6 +59,22 @@ Question _nadie() => Question(
       'direct pronoun',
 );
 
+// Made up for the screenshots: a longer sentence than the sample has.
+const _estacionSentence =
+    'Cuando llegué a la estación, el tren ya se había ido sin nosotros.';
+
+Question _estacion() => Question(
+  id: 'u6-long',
+  game: GameType.order,
+  category: 'Verb forms',
+  type: QuestionType.grammar,
+  prompt: _estacionSentence,
+  answers: const [_estacionSentence],
+  explanation: 'ya se había ido = had already left (pluperfect)',
+);
+
+const _estacionHalf = ['Cuando', 'llegué', 'a', 'la', 'estación,', 'el'];
+
 const _nadieRight = ['No', 'se', 'lo', 'he', 'dicho', 'a', 'nadie.'];
 const _nadieWrong = ['No', 'lo', 'se', 'he', 'dicho', 'a', 'nadie.'];
 
@@ -76,7 +96,11 @@ void main() {
 
   Future<void> place(WidgetTester tester, List<String> words) async {
     for (final w in words) {
-      await tester.tap(find.widgetWithText(AnswerOption, w));
+      final chip = find.widgetWithText(WordChip, w);
+      // The long sentence's chips run below a landscape screen.
+      await tester.ensureVisible(chip);
+      await tester.pumpAndSettle();
+      await tester.tap(chip);
       await tester.pumpAndSettle();
     }
     await settle(tester);
@@ -115,7 +139,34 @@ void main() {
         matchesGoldenFile(goldenName(_screen, state, size)),
       );
 
+  Future<void> startLong(WidgetTester tester) async {
+    await tester.pumpWidget(
+      _App(
+        child: OrderScreen(questions: [_estacion()], random: Random(3)),
+      ),
+    );
+    await settle(tester);
+    await place(tester, _estacionHalf);
+  }
+
+  testWidgets('order long sentence, 320 wide', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await startLong(tester);
+    await expectLater(
+      find.byType(_App),
+      matchesGoldenFile('${_screen}_long-320_phone.png'),
+    );
+  });
+
   for (final size in ScreenSize.values) {
+    testWidgets('order long sentence, ${size.name}', (tester) async {
+      setScreenSize(tester, size);
+      await startLong(tester);
+      await shot(tester, size, 'long');
+    });
+
     testWidgets('order start, ${size.name}', (tester) async {
       await start(tester, size);
       await shot(tester, size, 'start');

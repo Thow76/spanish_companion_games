@@ -56,16 +56,15 @@ OrderScreen _screen(List<Question> questions) =>
 PrimaryButton _button(WidgetTester tester) =>
     tester.widget<PrimaryButton>(find.byType(PrimaryButton));
 
-AnswerState _wordState(WidgetTester tester, String word) => tester
-    .widget<AnswerOption>(find.widgetWithText(AnswerOption, word))
-    .state;
+WordChipState _wordState(WidgetTester tester, String word) =>
+    tester.widget<WordChip>(find.widgetWithText(WordChip, word)).state;
 
 PromptCard _card(WidgetTester tester) =>
     tester.widget<PromptCard>(find.byType(PromptCard));
 
 Future<void> _tapWords(WidgetTester tester, List<String> words) async {
   for (final w in words) {
-    await tester.tap(find.widgetWithText(AnswerOption, w));
+    await tester.tap(find.widgetWithText(WordChip, w));
     await tester.pumpAndSettle();
   }
 }
@@ -117,7 +116,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(OrderScreen.instruction), findsOneWidget);
-    expect(find.byType(AnswerOption), findsNWidgets(6));
+    expect(find.byType(WordChip), findsNWidgets(6));
     expect(_card(tester).sentence, '');
     expect(_button(tester).onPressed, isNull);
   });
@@ -130,12 +129,12 @@ void main() {
 
     await _tapWords(tester, ['Siempre', 'me']);
     expect(_card(tester).sentence, 'Siempre me');
-    expect(_wordState(tester, 'Siempre'), AnswerState.selected);
-    expect(_wordState(tester, 'levanto'), AnswerState.resting);
+    expect(_wordState(tester, 'Siempre'), WordChipState.placed);
+    expect(_wordState(tester, 'levanto'), WordChipState.toPlace);
 
     await _tapWords(tester, ['Siempre']);
     expect(_card(tester).sentence, 'me');
-    expect(_wordState(tester, 'Siempre'), AnswerState.resting);
+    expect(_wordState(tester, 'Siempre'), WordChipState.toPlace);
     expect(_button(tester).onPressed, isNull);
   });
 
@@ -164,7 +163,7 @@ void main() {
     expect(_card(tester).corrected, isNull);
     expect(find.byType(ExplanationCard), findsOneWidget);
     expect(find.text('You wrote'), findsNothing);
-    expect(_wordState(tester, 'Siempre'), AnswerState.dimmed);
+    expect(_wordState(tester, 'Siempre'), WordChipState.done);
     await _letToastGo(tester);
   });
 
@@ -212,7 +211,7 @@ void main() {
 
     expect(find.text('Question 2 of 2'), findsOneWidget);
     expect(_card(tester).sentence, '');
-    expect(find.byType(AnswerOption), findsNWidgets(7));
+    expect(find.byType(WordChip), findsNWidgets(7));
 
     await _tapWords(tester, ['No', 'lo', 'se', 'he', 'dicho', 'a', 'nadie.']);
     await tester.tap(find.text('Check'));
