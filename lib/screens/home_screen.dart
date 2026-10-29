@@ -2,6 +2,12 @@
 /// (phase 1) and "Recall" (phase 2), one card per game with the number of
 /// questions available for it, and a reload button in the top bar.
 ///
+/// A filter card above the groups (B12) narrows every game to one type
+/// (grammar errors or language notes), one phase, or one category, or any
+/// mix of the three; the card counts follow it, and choosing a phase shows
+/// only that phase's group. The filter is kept for the app session,
+/// including a reload.
+///
 /// For now the questions come from the bundled sample file. B8 will replace
 /// the loader with the Drive file and pass its name as [HomeScreen.sourceName].
 ///
@@ -14,6 +20,7 @@ import 'package:flutter/material.dart';
 
 import '../data/question_loader.dart';
 import '../models/question.dart';
+import '../models/question_filter.dart';
 import '../models/question_parser.dart';
 import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
@@ -61,6 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// (B7). Kept when the questions are reloaded.
   final SessionTally _session = SessionTally();
 
+  /// What to play (B12). Kept when the questions are reloaded.
+  QuestionFilter _filter = QuestionFilter.all;
+
   @override
   void initState() {
     super.initState();
@@ -91,9 +101,10 @@ class _HomeScreenState extends State<HomeScreen> {
             questions: questions,
             session: _session,
           ),
-          // Sentence ordering joins the tally once UI PR #23 (which changes
-          // order_screen.dart) is merged; until then it keeps its stand-in.
-          GameType.order => OrderScreen(questions: questions),
+          GameType.order => OrderScreen(
+            questions: questions,
+            session: _session,
+          ),
           GameType.match => MatchScreen(
             questions: questions,
             session: _session,
@@ -122,11 +133,19 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
         final parsed = snapshot.data!;
+        // A category the new file no longer has is dropped, so a reload
+        // never leaves every game empty for a reason that can't be seen.
+        final filter = _filter.keepingCategoryIn(parsed.questions);
+        final shown = filter.apply(parsed.questions);
         return _LoadedView(
           parsed: parsed,
+          shown: shown,
+          filter: filter,
+          onFilterChanged: (f) => setState(() => _filter = f),
           sourceLine: _sourceLine(parsed.questions.length, widget.sourceName),
           onReload: _reload,
-          onGameSelected: (game) => _openGame(game, parsed.forGame(game)),
+          onGameSelected: (game) =>
+              _openGame(game, shown.where((q) => q.game == game).toList()),
         );
       },
     );
@@ -147,19 +166,35 @@ class _HomeScreenState extends State<HomeScreen> {
 class _LoadedView extends StatelessWidget {
   const _LoadedView({
     required this.parsed,
+    required this.shown,
+    required this.filter,
+    required this.onFilterChanged,
     required this.sourceLine,
     required this.onReload,
     required this.onGameSelected,
   });
 
   final ParsedQuestions parsed;
+
+  /// The questions that pass [filter], in file order.
+  final List<Question> shown;
+  final QuestionFilter filter;
+  final ValueChanged<QuestionFilter> onFilterChanged;
   final String sourceLine;
   final VoidCallback onReload;
   final ValueChanged<GameType> onGameSelected;
 
   @override
   Widget build(BuildContext context) {
-    final counts = parsed.countByGame;
+    final counts = <GameType, int>{for (final g in GameType.values) g: 0};
+    for (final q in shown) {
+      counts[q.game] = counts[q.game]! + 1;
+    }
+    final showNew =
+        filter.phase == null || filter.phase == QuestionPhase.noticeAndCorrect;
+    final showRecall =
+        filter.phase == null || filter.phase == QuestionPhase.recall;
+    final type = AppTypography.of(context);
     final laptop = FormFactor.of(context) == FormFactor.laptop;
 
     Widget group(QuestionPhase phase) => _GameGroup(
@@ -177,15 +212,37 @@ class _LoadedView extends StatelessWidget {
           SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
           _ProblemsNotice(problems: parsed.problems),
         ],
-        // Phase 1: Andrew's own sentences with the mistake marked.
-        const PhaseHeading.newCorrections(),
-        group(QuestionPhase.noticeAndCorrect),
+        // What to play (B12).
+        SizedBox(
+          height: parsed.hasProblems
+              ? AppSpacing.s12
+              : (laptop ? AppSpacing.s24 : AppSpacing.s16),
+        ),
+        _FilterCard(
+          key: const ValueKey('home-filter'),
+          filter: filter,
+          categories: QuestionFilter.categoriesOf(parsed.questions),
+          shownCount: shown.length,
+          totalCount: parsed.questions.length,
+          onChanged: onFilterChanged,
+        ),
+        if (shown.isEmpty && parsed.questions.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.s12),
+          Text(_FilterCard.noMatchText, style: type.caption),
+        ],
+        if (showNew) ...[
+          // Phase 1: Andrew's own sentences with the mistake marked.
+          const PhaseHeading.newCorrections(),
+          group(QuestionPhase.noticeAndCorrect),
+        ],
         // Laptop: 32 between the groups (the heading brings 24 of it).
-        if (laptop)
+        if (laptop && showNew && showRecall)
           const SizedBox(height: AppLayout.laptopGroupGap - AppSpacing.s24),
-        // Phase 2: points already corrected, in new sentences.
-        const PhaseHeading.recall(),
-        group(QuestionPhase.recall),
+        if (showRecall) ...[
+          // Phase 2: points already corrected, in new sentences.
+          const PhaseHeading.recall(),
+          group(QuestionPhase.recall),
+        ],
       ],
     );
   }
@@ -252,6 +309,139 @@ class _GameGroup extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The filter (B12): a quiet card like the skipped-questions notice. Shut,
+/// it reads "Filter: All questions" (or what is chosen, with "5 of 15
+/// questions" under it); open, it shows three rows of choices, Type, Phase
+/// and Category, each starting with "All". The chosen one in each row is
+/// highlighted.
+///
+/// The spec has no filter control; the choices use WordChip (the closest
+/// shared widget: a tappable chip with a highlighted state).
+class _FilterCard extends StatelessWidget {
+  const _FilterCard({
+    super.key,
+    required this.filter,
+    required this.categories,
+    required this.shownCount,
+    required this.totalCount,
+    required this.onChanged,
+  });
+
+  final QuestionFilter filter;
+  final List<String> categories;
+  final int shownCount;
+  final int totalCount;
+  final ValueChanged<QuestionFilter> onChanged;
+
+  static const String allLabel = 'All';
+  static const String noMatchText =
+      'No questions match this filter. Choose "All" in a row to widen it.';
+
+  static String countText(int shown, int total) =>
+      '$shown of ${total == 1 ? '1 question' : '$total questions'}';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+
+    Widget row<T>(
+      String label,
+      List<T> values,
+      String Function(T) labelOf,
+      T? chosen,
+      bool Function(T, T) same,
+      QuestionFilter Function(T?) change,
+    ) {
+      Widget chip(String text, bool selected, T? value) => WordChip(
+        key: ValueKey('filter-$label-$text'),
+        label: text,
+        state: selected ? WordChipState.placed : WordChipState.toPlace,
+        onPressed: selected ? null : () => onChanged(change(value)),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(header: true, child: Text(label, style: type.caption)),
+            const SizedBox(height: AppSpacing.s8),
+            Wrap(
+              spacing: AppSpacing.s8,
+              runSpacing: AppSpacing.s8,
+              children: [
+                chip(allLabel, chosen == null, null),
+                for (final v in values)
+                  chip(labelOf(v), chosen != null && same(v, chosen), v),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Material(
+      color: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppRadius.cardAll,
+        side: BorderSide(color: AppColors.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: AppColors.textMuted,
+        collapsedIconColor: AppColors.textMuted,
+        leading: Icon(
+          Icons.filter_list_rounded,
+          size: AppSizes.iconSmall,
+          color: filter.isAll ? AppColors.textMuted : AppColors.accent,
+        ),
+        title: Text(
+          'Filter: ${filter.summary}',
+          style: type.caption.copyWith(color: AppColors.textSecondary),
+        ),
+        subtitle: filter.isAll
+            ? null
+            : Text(countText(shownCount, totalCount), style: type.caption),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.s16,
+          0,
+          AppSpacing.s16,
+          AppSpacing.s16,
+        ),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row<QuestionType>(
+            'Type',
+            QuestionType.values,
+            QuestionFilter.typeLabel,
+            filter.type,
+            (a, b) => a == b,
+            filter.withType,
+          ),
+          row<QuestionPhase>(
+            'Phase',
+            QuestionPhase.values,
+            (p) => p.label,
+            filter.phase,
+            (a, b) => a == b,
+            filter.withPhase,
+          ),
+          if (categories.isNotEmpty)
+            row<String>(
+              'Category',
+              categories,
+              (c) => c,
+              filter.category,
+              (a, b) => a.trim().toLowerCase() == b.trim().toLowerCase(),
+              filter.withCategory,
+            ),
+        ],
+      ),
     );
   }
 }
