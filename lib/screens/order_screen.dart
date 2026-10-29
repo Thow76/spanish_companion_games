@@ -18,8 +18,9 @@
 /// on its word, then shuffled so they never start in the right order.
 /// Checking uses [isAcceptedAnswer] against `answers` (trim, ignore case
 /// and final punctuation, accents must match), so alternatives listed in
-/// `answers` are accepted. The end-of-session summary is B7's; until then
-/// the screen ends with the same short stand-in as B3, B5 and B14.
+/// `answers` are accepted. The session ends with the summary
+/// ([SessionSummaryView], B7); each check is recorded in the app session's
+/// tally.
 library;
 
 import 'dart:math';
@@ -28,21 +29,33 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
+import 'session_summary_view.dart';
 
 /// Plays a session of Sentence ordering questions, in the order given.
 ///
 /// Questions from other games are skipped. [random] shuffles the words;
 /// tests pass a seeded one so the order is the same every run.
 class OrderScreen extends StatefulWidget {
-  const OrderScreen({super.key, required this.questions, this.random});
+  const OrderScreen({
+    super.key,
+    required this.questions,
+    this.random,
+    this.session,
+  });
 
   final List<Question> questions;
   final Random? random;
+
+  /// The app session's tally (B7), shared by every game and kept by the
+  /// home screen. Each checked question is recorded in it. Null (tests)
+  /// means the summary counts this round only.
+  final SessionTally? session;
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction = 'Put the words in order';
@@ -114,9 +127,7 @@ class _OrderScreenState extends State<OrderScreen> {
 
   /// "Next question" gets keyboard focus after checking (spec section 10).
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
-  final FocusNode _topBarActionFocus = FocusNode(
-    debugLabel: 'Top bar action',
-  );
+  final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
 
   @override
   void initState() {
@@ -141,7 +152,6 @@ class _OrderScreenState extends State<OrderScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
-  int get _score => _results.where((r) => r == true).length;
 
   /// The sentence as built so far.
   String get _built => _placed.map((i) => _words[i]).join(' ');
@@ -168,6 +178,7 @@ class _OrderScreenState extends State<OrderScreen> {
       _correct = correct;
       _results[_index] = correct;
       _toastResult = correct;
+      widget.session?.record(_question, correct);
       _toastId++;
     });
     // Portrait waits for the toast to go (see [_onToastHidden]); landscape
@@ -262,9 +273,11 @@ class _OrderScreenState extends State<OrderScreen> {
       return _EmptyView(onBack: _goHome);
     }
     if (_finished) {
-      return _SessionEndView(
-        score: _score,
-        total: _total,
+      return SessionSummaryView(
+        game: GameType.order,
+        questions: _questions,
+        results: _results,
+        session: widget.session,
         onPlayAgain: _playAgain,
         onBack: _goHome,
       );
@@ -373,54 +386,6 @@ class _EmptyView extends StatelessWidget {
       topBar: GameTopBar(title: GameType.order.label, onBack: onBack),
       primaryButton: PrimaryButton(label: 'Back to games', onPressed: onBack),
       children: [Text('No questions for this game yet.', style: type.body)],
-    );
-  }
-}
-
-/// Stand-in for the end-of-session summary (B7), the same as B3's, B5's
-/// and B14's.
-class _SessionEndView extends StatelessWidget {
-  const _SessionEndView({
-    required this.score,
-    required this.total,
-    required this.onPlayAgain,
-    required this.onBack,
-  });
-
-  final int score;
-  final int total;
-  final VoidCallback onPlayAgain;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return GameFrame(
-      topBar: GameTopBar(
-        title: GameType.order.label,
-        onBack: onBack,
-        actionLabel: 'Play again',
-        onAction: onPlayAgain,
-      ),
-      primaryButton: PrimaryButton(
-        label: 'Play again',
-        onPressed: onPlayAgain,
-        trailingIcon: Icons.refresh_rounded,
-      ),
-      children: [
-        Semantics(
-          header: true,
-          child: Text('Session complete', style: type.cardTitle),
-        ),
-        Text('You got $score of $total right.', style: type.body),
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.s8),
-          child: Text(
-            'The full summary comes in a later step.',
-            style: type.caption,
-          ),
-        ),
-      ],
     );
   }
 }
