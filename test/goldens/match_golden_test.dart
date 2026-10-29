@@ -10,6 +10,8 @@
 /// - `match_wrong_<size>`: "depender" paired with "con", flashing coral.
 /// - `match_checked-right[-toast]_<size>`, `match_checked-wrong[-toast]_<size>`
 /// - `match_phrases_<size>`: the verb + noun question, phrase-length tiles.
+/// - `match_phrases-checked[-toast]_<size>`: that question done, each pair
+///   in one row and every right-hand phrase a mint rule chip (U8).
 ///
 /// The right column is shuffled with a seeded [Random], so the screenshots
 /// are the same every run.
@@ -189,6 +191,14 @@ void main() {
       await pair(tester, 'tomar', 'una decisión');
       await settle(tester);
       await shot(tester, size, 'phrases');
+    });
+
+    testWidgets('match phrases checked, ${size.name}', (tester) async {
+      await start(tester, size, [_nouns()]);
+      await pair(tester, 'tomar', 'una decisión');
+      await pair(tester, 'prestar', 'atención');
+      await pair(tester, 'hacer', 'cola');
+      await finish(tester, size, 'phrases-checked', 'dar', 'un paseo');
     });
   }
 }

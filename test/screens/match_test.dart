@@ -180,6 +180,24 @@ void main() {
     await _letToastGo(tester);
   });
 
+  testWidgets('once done, each pair sits in one row (U8)', (tester) async {
+    await tester.pumpWidget(_app(_screen([_verbs()])));
+    await tester.pumpAndSettle();
+
+    await _pair(tester, 'pensar', 'en');
+    await _pair(tester, 'depender', 'de');
+    await _tap(tester, 'soñar');
+    await _tap(tester, 'con');
+    await tester.pump(const Duration(milliseconds: 200));
+
+    double rowOf(String label) =>
+        tester.getCenter(find.widgetWithText(AnswerOption, label)).dy;
+    expect(rowOf('en'), rowOf('pensar'));
+    expect(rowOf('de'), rowOf('depender'));
+    expect(rowOf('con'), rowOf('soñar'));
+    await _letToastGo(tester);
+  });
+
   testWidgets('a wrong pairing on the way: Not quite and You wrote', (
     tester,
   ) async {

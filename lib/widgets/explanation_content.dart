@@ -8,6 +8,10 @@
 ///    become placeholder chips; "+" stays plain), the right side "Meaning".
 /// 3. Otherwise the plain `explanation` text.
 ///
+/// A rule that lists several patterns ("pensar en, depender de") keeps each
+/// comma or semicolon out of the chips: it becomes a "·" joiner between
+/// them.
+///
 /// Display only; answer checking lives in `lib/models/`.
 library;
 
@@ -81,7 +85,18 @@ class ExplanationContent {
     'sb',
   };
 
-  static const Set<String> _joiners = {'+', '/', '→', '...', '…'};
+  /// The joiner a comma or semicolon in a rule becomes ("pensar en ·
+  /// depender de").
+  static const String listSeparator = '·';
+
+  static const Set<String> _joiners = {
+    '+',
+    '/',
+    '→',
+    '...',
+    '…',
+    listSeparator,
+  };
 
   /// Builds the content for a question.
   ///
@@ -89,6 +104,10 @@ class ExplanationContent {
   /// [chosen] (the option picked); for a wrong typed answer pass [typed]
   /// (the learner's text) and [typedAgainst] (the accepted sentence it is
   /// compared with). Leave both null for a right answer.
+  ///
+  /// [allAnswers] makes every answer that appears in the rule a mint chip,
+  /// not just the first one found (Matching, where each right-hand word is
+  /// an answer).
   factory ExplanationContent.build({
     required String explanation,
     String? rule,
@@ -97,6 +116,7 @@ class ExplanationContent {
     String? chosen,
     String? typed,
     String? typedAgainst,
+    bool allAnswers = false,
   }) {
     var ruleText = rule?.trim();
     var meaningText = meaning?.trim();
@@ -111,7 +131,7 @@ class ExplanationContent {
       return ExplanationContent(plainText: explanation.trim());
     }
 
-    final parts = parseRule(ruleText, answers);
+    final parts = parseRule(ruleText, answers, allAnswers: allAnswers);
     if (parts.isEmpty) {
       return ExplanationContent(plainText: explanation.trim());
     }
@@ -139,37 +159,78 @@ class ExplanationContent {
       s.toLowerCase().replaceAll(RegExp(r'^[¿¡"«(]+|[.,;:!?"»)]+$'), '');
 
   /// Splits a rule such as "pensar en + infinitive" into chips. A
-  /// multi-word answer ("me acuerdo de") becomes one mint chip.
-  static List<RulePart> parseRule(String rule, List<String> answers) {
-    final tokens = SentenceText.words(_trimFullStop(rule.trim()));
+  /// multi-word answer ("me acuerdo de") becomes one mint chip. A comma or
+  /// semicolon at the end of a word becomes a [listSeparator] joiner, so
+  /// the chips never carry it ("en," → [en] ·).
+  ///
+  /// By default only the first accepted answer found in the rule is mint;
+  /// with [allAnswers] every place an answer appears is.
+  static List<RulePart> parseRule(
+    String rule,
+    List<String> answers, {
+    bool allAnswers = false,
+  }) {
+    final tokens = <String>[];
+    for (final word in SentenceText.words(_trimFullStop(rule.trim()))) {
+      final listEnd =
+          word.length > 1 && (word.endsWith(',') || word.endsWith(';'));
+      if (!listEnd) {
+        tokens.add(word);
+        continue;
+      }
+      tokens.add(word.substring(0, word.length - 1));
+      tokens.add(listSeparator);
+    }
+    while (tokens.isNotEmpty && tokens.last == listSeparator) {
+      tokens.removeLast();
+    }
     final keys = tokens.map(_key).toList();
     final parts = <RulePart>[];
 
-    // Find where the first accepted answer that appears in the rule sits.
-    var answerStart = -1;
-    var answerLength = 0;
-    for (final answer in answers) {
-      final words = SentenceText.words(answer).map(_key).toList();
-      if (words.isEmpty) continue;
-      for (var i = 0; i + words.length <= keys.length; i++) {
-        var match = true;
-        for (var k = 0; k < words.length; k++) {
-          if (keys[i + k] != words[k]) {
-            match = false;
+    final answerWords = [
+      for (final answer in answers)
+        SentenceText.words(answer).map(_key).toList(),
+    ].where((w) => w.isNotEmpty).toList();
+
+    bool matchesAt(List<String> words, int i) {
+      if (i + words.length > keys.length) return false;
+      for (var k = 0; k < words.length; k++) {
+        if (keys[i + k] != words[k]) return false;
+      }
+      return true;
+    }
+
+    // Where the answers sit: start index → number of words.
+    final answerAt = <int, int>{};
+    if (allAnswers) {
+      // Longest answers first, so "una decisión" wins over "una".
+      final longestFirst = List<List<String>>.of(answerWords)
+        ..sort((a, b) => b.length.compareTo(a.length));
+      for (var i = 0; i < keys.length; i++) {
+        for (final words in longestFirst) {
+          if (matchesAt(words, i)) {
+            answerAt[i] = words.length;
+            i += words.length - 1;
             break;
           }
         }
-        if (match) {
-          answerStart = i;
-          answerLength = words.length;
-          break;
-        }
       }
-      if (answerStart >= 0) break;
+    } else {
+      // The first accepted answer that appears in the rule.
+      for (final words in answerWords) {
+        for (var i = 0; i < keys.length; i++) {
+          if (matchesAt(words, i)) {
+            answerAt[i] = words.length;
+            break;
+          }
+        }
+        if (answerAt.isNotEmpty) break;
+      }
     }
 
     for (var i = 0; i < tokens.length; i++) {
-      if (i == answerStart) {
+      final answerLength = answerAt[i];
+      if (answerLength != null) {
         parts.add((
           text: tokens.sublist(i, i + answerLength).join(' '),
           kind: RulePartKind.answer,
@@ -232,10 +293,20 @@ class ExplanationContent {
       (text: w.word, wrong: w.changed),
   ];
 
-  /// The rule read as one phrase: "pensar en plus infinitive".
-  String get spokenRule => [
-    for (final p in rule ?? const <RulePart>[]) p.text == '+' ? 'plus' : p.text,
-  ].join(' ');
+  /// The rule read as one phrase: "pensar en plus infinitive"; a list
+  /// separator is read as a comma ("pensar en, depender de").
+  String get spokenRule {
+    final out = StringBuffer();
+    for (final p in rule ?? const <RulePart>[]) {
+      if (p.text == listSeparator && p.kind == RulePartKind.joiner) {
+        out.write(',');
+        continue;
+      }
+      if (out.isNotEmpty) out.write(' ');
+      out.write(p.text == '+' ? 'plus' : p.text);
+    }
+    return out.toString();
+  }
 
   /// "pensar de, wrong" for the "You wrote" line.
   String get spokenYouWrote {
