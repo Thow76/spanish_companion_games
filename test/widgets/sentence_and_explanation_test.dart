@@ -129,5 +129,43 @@ void main() {
       expect(parts.last.text, 'plural noun');
       expect(parts.last.kind, RulePartKind.placeholder);
     });
+
+    test('commas in a list of patterns become "·" joiners, not chip text', () {
+      final parts = ExplanationContent.parseRule(
+        'pensar en, depender de, soñar con',
+        const ['en'],
+      );
+      expect(parts.map((p) => p.text), [
+        'pensar',
+        'en',
+        '·',
+        'depender',
+        'de',
+        '·',
+        'soñar',
+        'con',
+      ]);
+      expect(parts[2].kind, RulePartKind.joiner);
+      // Only the first answer found is mint by default.
+      expect(
+        parts.where((p) => p.kind == RulePartKind.answer).map((p) => p.text),
+        ['en'],
+      );
+    });
+
+    test('allAnswers makes every answer in the rule a mint chip', () {
+      final c = ExplanationContent.build(
+        explanation:
+            'prestar atención, tomar una decisión, hacer cola = fixed verb + '
+            'noun pairs',
+        answers: const ['atención', 'una decisión', 'cola'],
+        allAnswers: true,
+      );
+      expect(
+        c.rule!.where((p) => p.kind == RulePartKind.answer).map((p) => p.text),
+        ['atención', 'una decisión', 'cola'],
+      );
+      expect(c.spokenRule, 'prestar atención, tomar una decisión, hacer cola');
+    });
   });
 }

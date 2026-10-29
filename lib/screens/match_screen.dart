@@ -113,6 +113,12 @@ class _MatchScreenState extends State<MatchScreen> {
   final Set<int> _matchedLeft = {};
   final Set<int> _matchedRight = {};
 
+  /// For each matched left tile, the right tile it was matched with. Used
+  /// only for display: once every pair is matched, each right tile moves
+  /// into its partner's row, so the finished question reads pair by pair
+  /// (U8).
+  final Map<int, int> _partnerOfLeft = {};
+
   /// The pair flashing coral after a wrong pairing, if any.
   int? _wrongLeft;
   int? _wrongRight;
@@ -202,6 +208,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (isMatchingPair(_question, _lefts[l], _rights[r])) {
       _matchedLeft.add(l);
       _matchedRight.add(r);
+      _partnerOfLeft[l] = r;
       if (_matchedLeft.length == _lefts.length) _finishQuestion();
       return;
     }
@@ -252,6 +259,7 @@ class _MatchScreenState extends State<MatchScreen> {
     _pickedRight = null;
     _matchedLeft.clear();
     _matchedRight.clear();
+    _partnerOfLeft.clear();
     _clearFlash();
     _wrongTries.clear();
     _done = false;
@@ -306,6 +314,7 @@ class _MatchScreenState extends State<MatchScreen> {
       rule: q.rule,
       meaning: q.meaning,
       answers: [for (final p in q.pairs) p.right],
+      allAnswers: true,
     );
     if (_correct) return base;
     final wrote = <WrotePart>[];
@@ -331,9 +340,20 @@ class _MatchScreenState extends State<MatchScreen> {
       },
   ];
 
+  /// Which right tile sits in each row: the shuffled order while playing;
+  /// once every pair is matched, each left tile's partner in its row.
+  List<int> get _rightRows {
+    final rows = [for (var i = 0; i < _rights.length; i++) i];
+    if (!_done || _partnerOfLeft.length != _lefts.length) return rows;
+    return [for (var i = 0; i < _lefts.length; i++) _partnerOfLeft[i]!];
+  }
+
   /// The two columns, one row per pair; the two tiles in a row share a
   /// height, so a tile that wraps does not knock the columns out of line.
+  /// Tiles keep their key when they change rows, keyed by the tile, not
+  /// the row.
   Widget _tiles(Question q) {
+    final rightRows = _rightRows;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -354,16 +374,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.s12),
-                Expanded(
-                  child: AnswerOption(
-                    key: ValueKey('match-right-${q.id}-$i'),
-                    label: _rights[i],
-                    state: _rightState(i),
-                    onPressed: _done || _matchedRight.contains(i)
-                        ? null
-                        : () => _tapRight(i),
-                  ),
-                ),
+                Expanded(child: _rightTile(q, rightRows[i])),
               ],
             ),
           ),
@@ -371,6 +382,13 @@ class _MatchScreenState extends State<MatchScreen> {
       ],
     );
   }
+
+  Widget _rightTile(Question q, int r) => AnswerOption(
+    key: ValueKey('match-right-${q.id}-$r'),
+    label: _rights[r],
+    state: _rightState(r),
+    onPressed: _done || _matchedRight.contains(r) ? null : () => _tapRight(r),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +449,11 @@ class _MatchScreenState extends State<MatchScreen> {
       sidePanel: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SessionPanel(marks: _marks, showPlaceholder: !_done),
+          SessionPanel(
+            marks: _marks,
+            showPlaceholder: !_done,
+            placeholder: SessionPanel.matchingPlaceholderText,
+          ),
           if (content != null) ...[
             const SizedBox(height: AppLayout.laptopCardGap),
             FeedbackPanel(correct: _correct, content: content),

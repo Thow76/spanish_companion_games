@@ -90,20 +90,30 @@ enum QuestionMark {
 /// SessionPanel (laptop only): "This session" and the score (from the first
 /// check on), then one row per question. Before checking, a dashed
 /// placeholder under it reads "The explanation appears here after you
-/// check." ([showPlaceholder]).
+/// check." ([showPlaceholder]); Matching, which has no Check step, passes
+/// [matchingPlaceholderText] as [placeholder].
 class SessionPanel extends StatelessWidget {
   const SessionPanel({
     super.key,
     required this.marks,
     this.showPlaceholder = false,
+    this.placeholder = placeholderText,
   });
 
   /// One entry per question in the session, in order.
   final List<QuestionMark> marks;
   final bool showPlaceholder;
 
+  /// The placeholder's text.
+  final String placeholder;
+
   static const String placeholderText =
       'The explanation appears here after you check.';
+
+  /// The placeholder for Matching, where each pair is checked as it is
+  /// made.
+  static const String matchingPlaceholderText =
+      'The explanation appears here once every pair is matched.';
 
   int get _score => marks.where((m) => m == QuestionMark.correct).length;
   int get _answered => marks
@@ -159,7 +169,7 @@ class SessionPanel extends StatelessWidget {
             radius: AppRadius.card,
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.s20),
-              child: Text(placeholderText, style: type.caption),
+              child: Text(placeholder, style: type.caption),
             ),
           ),
         ],
