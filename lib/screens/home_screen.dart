@@ -8,8 +8,9 @@
 /// only that phase's group. The filter is kept for the app session,
 /// including a reload.
 ///
-/// For now the questions come from the bundled sample file. B8 will replace
-/// the loader with the Drive file and pass its name as [HomeScreen.sourceName].
+/// The questions come from [HomeScreen.source]: the bundled sample file by
+/// default, or `questions.json` on Google Drive when the app is run with the
+/// Drive key and file ID (B8, wired up in `main.dart`).
 ///
 /// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
 /// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
@@ -51,8 +52,8 @@ class HomeScreen extends StatefulWidget {
   final QuestionSource source;
 
   /// Short name of where the questions come from, shown in the top bar's
-  /// source line ("9 questions · sample file"). B8 passes the Drive file's
-  /// name.
+  /// source line ("9 questions · sample file"); "Google Drive" when loading
+  /// from Drive (B8).
   final String sourceName;
 
   static const String sampleSourceName = 'sample file';
