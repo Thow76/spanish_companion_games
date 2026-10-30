@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'data/drive_source.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/form_factor.dart';
@@ -7,6 +8,10 @@ import 'theme/form_factor.dart';
 void main() {
   runApp(const SpanishGamesApp());
 }
+
+/// The Drive key and file ID, if the app was run or built with them (B8).
+/// Without them the home screen loads the bundled sample file.
+const DriveConfig _drive = DriveConfig.fromEnvironment();
 
 /// Root of the app: theme plus the home screen.
 class SpanishGamesApp extends StatelessWidget {
@@ -24,7 +29,12 @@ class SpanishGamesApp extends StatelessWidget {
         data: appTheme(FormFactor.of(context)),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: const HomeScreen(),
+      home: _drive.isConfigured
+          ? HomeScreen(
+              source: () => loadQuestionsFromDrive(_drive),
+              sourceName: driveSourceName,
+            )
+          : const HomeScreen(),
     );
   }
 }

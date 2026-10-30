@@ -38,6 +38,9 @@ dependencies:
   # The six game icons (UI spec section 7), SVGs in assets/icons/.
   flutter_svg: ^2.0.17
 
+  # Fetches questions.json from Google Drive (B8).
+  http: ^1.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
