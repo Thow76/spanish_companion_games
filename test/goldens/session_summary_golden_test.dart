@@ -6,6 +6,10 @@
 ///   ("Recall: None yet", no list).
 /// - `summary_recall-wrong_<size>`: a Fill the gap round with both
 ///   questions wrong (the gap card form, one typed question).
+/// - `summary_long_<size>` (U9): a Choose a correction round of four with
+///   three wrong, so the list runs past the screen; on laptop "Play again"
+///   is in the side panel and on screen.
+/// - `summary_long-320_phone` (U9): the same at 320×640, nothing sideways.
 @Tags(['golden'])
 library;
 
@@ -67,6 +71,33 @@ Question _espero() => Question(
       'esperar que + subjunctive = to hope that (no options here, so the '
       'learner types)',
 );
+
+// Made up for the long round (not in the sample file).
+Question _gente() => Question(
+  id: 'u9-long-003',
+  game: GameType.chooseCorrection,
+  category: 'Agreement',
+  type: QuestionType.grammar,
+  prompt: 'En mi barrio **la gente están** siempre dispuestos a ayudar.',
+  answers: const ['la gente está'],
+  options: const ['la gente está', 'las gentes están', 'la gente estamos'],
+  explanation: 'la gente + singular verb = people (takes a singular verb)',
+);
+
+Question _realizar() => Question(
+  id: 'u9-long-004',
+  type: QuestionType.note,
+  game: GameType.chooseCorrection,
+  category: 'False friend',
+  prompt: 'No **realicé** que la reunión era a las nueve.',
+  answers: const ['me di cuenta de'],
+  options: const ['me di cuenta de', 'realizaba', 'noté de'],
+  explanation: 'darse cuenta de = to realise (realizar = to carry out)',
+);
+
+List<Question> _longRound() => [_pensando(), _hermana(), _gente(), _realizar()];
+
+const List<bool?> _longResults = [true, false, false, false];
 
 void main() {
   setUpAll(setUpGoldens);
@@ -139,7 +170,47 @@ void main() {
         results: [false, false],
       );
     });
+
+    testWidgets('summary long, ${size.name}', (tester) async {
+      await shoot(
+        tester,
+        size,
+        'long',
+        game: GameType.chooseCorrection,
+        questions: _longRound(),
+        results: _longResults,
+      );
+      if (size == ScreenSize.laptop) {
+        // "Play again" sits in the side panel, inside the window.
+        final button = tester.getRect(
+          find.widgetWithText(FilledButton, 'Play again'),
+        );
+        expect(button.bottom, lessThanOrEqualTo(size.size.height));
+      }
+    });
   }
+
+  testWidgets('summary long, 320 wide', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _App(
+        child: SessionSummaryView(
+          game: GameType.chooseCorrection,
+          questions: _longRound(),
+          results: _longResults,
+          onPlayAgain: () {},
+          onBack: () {},
+        ),
+      ),
+    );
+    await settle(tester);
+    await expectLater(
+      find.byType(_App),
+      matchesGoldenFile('summary_long-320_phone.png'),
+    );
+  });
 }
 
 class _App extends StatelessWidget {
