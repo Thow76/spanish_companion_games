@@ -47,3 +47,7 @@ app.*.map.json
 # Screenshot PNGs in test/goldens/ are committed by the screenshots workflow
 # (never by hand). Failure images from a golden comparison are not kept.
 test/goldens/failures/
+
+# Drive API key and file ID for local runs (copy drive.example.json).
+# Never commit it.
+drive.json
