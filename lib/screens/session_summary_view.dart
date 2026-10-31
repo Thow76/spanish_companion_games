@@ -7,14 +7,19 @@
 ///   from the shared [SessionTally].
 /// - "To look at again": each question got wrong this round, with the
 ///   right answer on its prompt card and the explanation card under it.
-/// - "Play again" (bottom button on phones and laptop, the top-bar link in
-///   phone landscape); the back chevron returns to the games.
+/// - "Play again" (bottom button on phones, the top-bar link in phone
+///   landscape, under the session panel on laptop); the back chevron returns
+///   to the games.
 ///
 /// Laptop: the side panel shows the round's SessionPanel, every question
-/// ticked or crossed.
+/// ticked or crossed, with "Play again" under it, so the button is on screen
+/// however long the list is (U9; it used to sit below the list).
 ///
-/// The UI spec has no layout for this screen yet (U9 does its look); this
-/// uses the game frame and the shared widgets only, with no new styles.
+/// U9 (UI spec sections 1, 4, 5, 6, 8, 10; the spec has no drawing of this
+/// screen, so it follows the game frame): each wrong question is one block,
+/// its chip row reading "Question 2 of 3" as the laptop session panel's rows
+/// do, with 24 between blocks so one question's cards are not read as the
+/// next one's.
 library;
 
 import 'package:flutter/material.dart';
@@ -25,6 +30,7 @@ import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
 
 class SessionSummaryView extends StatelessWidget {
@@ -67,9 +73,10 @@ class SessionSummaryView extends StatelessWidget {
 
   int get _score => results.where((r) => r == true).length;
 
-  List<Question> get _wrong => [
+  /// The questions got wrong, with their 1-based place in the round.
+  List<(int, Question)> get _wrong => [
     for (var i = 0; i < questions.length && i < results.length; i++)
-      if (results[i] == false) questions[i],
+      if (results[i] == false) (i + 1, questions[i]),
   ];
 
   @override
@@ -79,10 +86,7 @@ class SessionSummaryView extends StatelessWidget {
     final wrong = _wrong;
 
     final rows = <Widget>[
-      Semantics(
-        header: true,
-        child: Text(title, style: type.cardTitle),
-      ),
+      Semantics(header: true, child: Text(title, style: type.cardTitle)),
       Text(scoreText(_score, questions.length), style: type.body),
       _SessionScores(tally: tally),
       if (wrong.isEmpty)
@@ -102,9 +106,31 @@ class SessionSummaryView extends StatelessWidget {
             ],
           ),
         ),
-        for (final q in wrong) _WrongQuestion(question: q),
+        _WrongList(
+          children: [
+            for (final (place, q) in wrong)
+              _WrongQuestion(
+                question: q,
+                place: place,
+                total: questions.length,
+              ),
+          ],
+        ),
       ],
     ];
+
+    final laptop = FormFactor.of(context) == FormFactor.laptop;
+    final playAgain = PrimaryButton(
+      label: 'Play again',
+      onPressed: onPlayAgain,
+      trailingIcon: Icons.refresh_rounded,
+    );
+    final sessionPanel = SessionPanel(
+      marks: [
+        for (final r in results)
+          r == true ? QuestionMark.correct : QuestionMark.wrong,
+      ],
+    );
 
     return GameFrame(
       topBar: GameTopBar(
@@ -113,15 +139,16 @@ class SessionSummaryView extends StatelessWidget {
         actionLabel: 'Play again',
         onAction: onPlayAgain,
       ),
-      primaryButton: PrimaryButton(
-        label: 'Play again',
-        onPressed: onPlayAgain,
-        trailingIcon: Icons.refresh_rounded,
-      ),
-      sidePanel: SessionPanel(
-        marks: [
-          for (final r in results)
-            r == true ? QuestionMark.correct : QuestionMark.wrong,
+      // On laptop the button goes in the side panel instead of under the
+      // list, so it is never below the fold.
+      primaryButton: laptop ? null : playAgain,
+      sidePanel: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          sessionPanel,
+          const SizedBox(height: AppSpacing.s16),
+          playAgain,
         ],
       ),
       children: rows,
@@ -185,12 +212,43 @@ class _SessionScores extends StatelessWidget {
   }
 }
 
-/// One question got wrong: its chip, the prompt card with the right answer
-/// in place, and the explanation.
+/// The wrong questions, 24 apart: more than the 8 inside a block and the
+/// frame's row gap, so each question's chip and cards read as one group.
+class _WrongList extends StatelessWidget {
+  const _WrongList({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.s24),
+          children[i],
+        ],
+      ],
+    );
+  }
+}
+
+/// One question got wrong: its chip row ("Question 2 of 3" on the right,
+/// matching the laptop session panel's row), the prompt card with the right
+/// answer in place, and the explanation.
 class _WrongQuestion extends StatelessWidget {
-  const _WrongQuestion({required this.question});
+  const _WrongQuestion({
+    required this.question,
+    required this.place,
+    required this.total,
+  });
 
   final Question question;
+
+  /// 1-based place in the round, and the round's length.
+  final int place;
+  final int total;
 
   @override
   Widget build(BuildContext context) {
@@ -203,9 +261,11 @@ class _WrongQuestion extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: CategoryChip(type: q.type.jsonValue, category: q.category),
+        ChipRow(
+          type: q.type.jsonValue,
+          category: q.category,
+          current: place,
+          total: total,
         ),
         if (q.game == GameType.match) ...[
           const SizedBox(height: AppSpacing.s8),
