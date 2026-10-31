@@ -19,6 +19,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../data/drive_source.dart';
 import '../data/question_loader.dart';
 import '../models/question.dart';
 import '../models/question_filter.dart';
@@ -128,8 +129,10 @@ class _HomeScreenState extends State<HomeScreen> {
           return const _LoadingView();
         }
         if (snapshot.hasError) {
+          final (message, detail) = describeLoadError(snapshot.error!);
           return _ErrorView(
-            message: _describeError(snapshot.error!),
+            message: message,
+            detail: detail,
             onReload: _reload,
           );
         }
@@ -157,11 +160,28 @@ class _HomeScreenState extends State<HomeScreen> {
     final count = total == 1 ? '1 question' : '$total questions';
     return '$count · $sourceName';
   }
+}
 
-  static String _describeError(Object error) {
-    if (error is QuestionFileException) return error.message;
-    return 'Could not load the questions: $error';
+/// The error view's text for a failed load (B9): a plain message, and an
+/// optional smaller detail line (Drive's own words, or the parser's).
+///
+/// Drive failures each have their own message ([DriveLoadException]). The
+/// error itself is never printed for anything else, because `http`'s
+/// errors carry the request URL, which holds the API key.
+(String, String?) describeLoadError(Object error) {
+  if (error is DriveLoadException) {
+    return (error.message(webAddress: _webAddress()), error.detail);
   }
+  if (error is QuestionFileException) return (error.message, null);
+  return ('Could not load the questions. Reload to try again.', null);
+}
+
+/// Where the app is running, e.g. `http://localhost:5000`; null when not
+/// served over http(s) (tests, desktop).
+String? _webAddress() {
+  final base = Uri.base;
+  if (base.scheme != 'http' && base.scheme != 'https') return null;
+  return base.origin;
 }
 
 class _LoadedView extends StatelessWidget {
@@ -519,9 +539,16 @@ class _LoadingView extends StatelessWidget {
 
 /// The file could not be read at all: the reason and a reload button.
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onReload});
+  const _ErrorView({
+    required this.message,
+    required this.onReload,
+    this.detail,
+  });
 
   final String message;
+
+  /// Smaller line under the message (Drive's own words), if any.
+  final String? detail;
   final VoidCallback onReload;
 
   static const String sourceLine = 'No questions loaded';
@@ -540,6 +567,10 @@ class _ErrorView extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.s12),
         Text(message, style: type.body, textAlign: TextAlign.center),
+        if (detail != null) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Text(detail!, style: type.caption, textAlign: TextAlign.center),
+        ],
         const SizedBox(height: AppSpacing.s24),
         Center(
           child: PrimaryButton(label: 'Reload questions', onPressed: onReload),

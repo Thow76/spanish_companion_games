@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:spanish_companion_games/data/drive_source.dart';
 import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
@@ -211,5 +212,66 @@ void main() {
 
     expect(find.text('File is not valid JSON'), findsOneWidget);
     expect(find.text('Reload questions'), findsOneWidget);
+  });
+
+  testWidgets('a Drive failure shows its plain message, and reload retries',
+      (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(
+      _app(() async {
+        calls++;
+        if (calls == 1) {
+          throw const DriveLoadException(
+            DriveProblem.notShared,
+            statusCode: 403,
+            detail: 'The user does not have sufficient permissions for file.',
+          );
+        }
+        return _sample();
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        const DriveLoadException(DriveProblem.notShared).message(),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('The user does not have sufficient permissions for file.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Reload questions'));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    expect(find.text('4 questions · sample file'), findsOneWidget);
+  });
+
+  testWidgets('an unknown error never shows its text (it may hold the key)',
+      (tester) async {
+    await tester.pumpWidget(
+      _app(() async => throw Exception('uri=https://x/?key=secret')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not load the questions. Reload to try again.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('secret'), findsNothing);
+  });
+
+  test('describeLoadError', () {
+    expect(
+      describeLoadError(const QuestionFileException('Bad file')),
+      ('Bad file', null),
+    );
+    final (message, detail) = describeLoadError(
+      const DriveLoadException(DriveProblem.noConnection),
+    );
+    expect(message, startsWith("Couldn't reach Google Drive"));
+    expect(detail, isNull);
   });
 }
