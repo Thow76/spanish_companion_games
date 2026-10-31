@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:spanish_companion_games/data/drive_source.dart';
-import 'package:spanish_companion_games/models/question_parser.dart';
 
 const _config = DriveConfig(apiKey: 'test-key', fileId: 'test-file');
 
@@ -68,26 +67,216 @@ void main() {
     await expectLater(
       loadQuestionsFromDrive(_config, client: client),
       throwsA(
-        isA<DriveLoadException>().having((e) => e.statusCode, 'status', 403),
+        isA<DriveLoadException>()
+            .having((e) => e.statusCode, 'status', 403)
+            .having((e) => e.problem, 'problem', DriveProblem.notShared),
       ),
     );
   });
 
-  test('no connection throws DriveLoadException without a status', () async {
-    final client = MockClient((_) async => throw Exception('offline'));
-    await expectLater(
-      loadQuestionsFromDrive(_config, client: client),
-      throwsA(
-        isA<DriveLoadException>().having((e) => e.statusCode, 'status', null),
-      ),
+  test('no connection throws noConnection, and never shows the key', () async {
+    final client = MockClient(
+      (request) async =>
+          throw http.ClientException('XMLHttpRequest error.', request.url),
     );
+    try {
+      await loadQuestionsFromDrive(_config, client: client);
+      fail('should have thrown');
+    } on DriveLoadException catch (e) {
+      expect(e.problem, DriveProblem.noConnection);
+      expect(e.statusCode, isNull);
+      expect(e.detail, isNull);
+      expect(e.message(), isNot(contains('test-key')));
+      expect(e.toString(), isNot(contains('test-key')));
+    }
   });
 
-  test('a file that is not JSON throws QuestionFileException', () async {
+  test('a file that is not JSON throws notValidJson', () async {
     final client = MockClient((_) async => http.Response('<html>', 200));
     await expectLater(
       loadQuestionsFromDrive(_config, client: client),
-      throwsA(isA<QuestionFileException>()),
+      throwsA(
+        isA<DriveLoadException>()
+            .having((e) => e.problem, 'problem', DriveProblem.notValidJson)
+            .having((e) => e.detail, 'detail', startsWith('File is not valid')),
+      ),
     );
+  });
+
+  test('JSON that is not a list throws notQuestionList', () async {
+    final client = MockClient((_) async => http.Response('{"a": 1}', 200));
+    await expectLater(
+      loadQuestionsFromDrive(_config, client: client),
+      throwsA(
+        isA<DriveLoadException>().having(
+          (e) => e.problem,
+          'problem',
+          DriveProblem.notQuestionList,
+        ),
+      ),
+    );
+  });
+
+  test('bytes that are not UTF-8 throw notValidJson', () async {
+    final client = MockClient(
+      (_) async => http.Response.bytes([0x5B, 0xFF, 0x5D], 200),
+    );
+    await expectLater(
+      loadQuestionsFromDrive(_config, client: client),
+      throwsA(
+        isA<DriveLoadException>().having(
+          (e) => e.problem,
+          'problem',
+          DriveProblem.notValidJson,
+        ),
+      ),
+    );
+  });
+
+  group('classifyDriveError', () {
+    String body(int code, String message, {String? reason, String? info}) =>
+        jsonEncode({
+          'error': {
+            'code': code,
+            'message': message,
+            if (reason != null)
+              'errors': [
+                {'message': message, 'domain': 'global', 'reason': reason},
+              ],
+            if (info != null)
+              'details': [
+                {
+                  '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+                  'reason': info,
+                  'domain': 'googleapis.com',
+                },
+              ],
+          },
+        });
+
+    test('file not link-shared (403)', () {
+      final e = classifyDriveError(
+        403,
+        body(
+          403,
+          'The user does not have sufficient permissions for file.',
+          reason: 'insufficientFilePermissions',
+        ),
+      );
+      expect(e.problem, DriveProblem.notShared);
+      expect(e.reason, 'insufficientFilePermissions');
+      expect(e.detail, startsWith('The user does not have'));
+    });
+
+    test('file not found (404)', () {
+      final e = classifyDriveError(
+        404,
+        body(404, 'File not found: test-file.', reason: 'notFound'),
+      );
+      expect(e.problem, DriveProblem.notFound);
+    });
+
+    test('key not valid (400)', () {
+      final e = classifyDriveError(
+        400,
+        body(
+          400,
+          'API key not valid. Please pass a valid API key.',
+          reason: 'badRequest',
+          info: 'API_KEY_INVALID',
+        ),
+      );
+      expect(e.problem, DriveProblem.keyRefused);
+    });
+
+    test('key restricted to other APIs', () {
+      final e = classifyDriveError(
+        403,
+        body(
+          403,
+          'Requests to this API are blocked.',
+          info: 'API_KEY_SERVICE_BLOCKED',
+        ),
+      );
+      expect(e.problem, DriveProblem.keyRefused);
+    });
+
+    test('key restricted to other websites', () {
+      final e = classifyDriveError(
+        403,
+        body(
+          403,
+          'Requests from referer http://localhost:5001/ are blocked.',
+          reason: 'forbidden',
+          info: 'API_KEY_HTTP_REFERRER_BLOCKED',
+        ),
+      );
+      expect(e.problem, DriveProblem.websiteNotAllowed);
+      expect(
+        e.message(webAddress: 'http://localhost:5001'),
+        contains('http://localhost:5001/*'),
+      );
+      expect(e.message(), isNot(contains('null')));
+    });
+
+    test('Drive API not turned on', () {
+      final e = classifyDriveError(
+        403,
+        body(
+          403,
+          'Google Drive API has not been used in project 123.',
+          reason: 'accessNotConfigured',
+          info: 'SERVICE_DISABLED',
+        ),
+      );
+      expect(e.problem, DriveProblem.apiNotEnabled);
+    });
+
+    test('a Google Docs file', () {
+      final e = classifyDriveError(
+        403,
+        body(
+          403,
+          'Only files with binary content can be downloaded.',
+          reason: 'fileNotDownloadable',
+        ),
+      );
+      expect(e.problem, DriveProblem.googleDocNotFile);
+    });
+
+    test('too many requests', () {
+      expect(
+        classifyDriveError(
+          403,
+          body(403, 'Rate limit exceeded.', reason: 'userRateLimitExceeded'),
+        ).problem,
+        DriveProblem.tooManyRequests,
+      );
+      expect(classifyDriveError(429, '').problem, DriveProblem.tooManyRequests);
+    });
+
+    test('server error, HTML body', () {
+      final e = classifyDriveError(503, '<html>Service Unavailable</html>');
+      expect(e.problem, DriveProblem.driveUnavailable);
+      expect(e.detail, isNull);
+    });
+
+    test('anything else names the status', () {
+      final e = classifyDriveError(418, '');
+      expect(e.problem, DriveProblem.other);
+      expect(e.message(), contains('(418)'));
+    });
+
+    test('a long message is cut short', () {
+      final e = classifyDriveError(403, body(403, 'x' * 500));
+      expect(e.detail!.length, lessThanOrEqualTo(201));
+    });
+  });
+
+  test('every problem has its own message', () {
+    final messages = {
+      for (final p in DriveProblem.values) DriveLoadException(p).message(),
+    };
+    expect(messages, hasLength(DriveProblem.values.length));
   });
 }
