@@ -155,6 +155,22 @@ abstract final class AppSizes {
   /// landscape card; below it the card falls back to the portrait layout.
   static const double explanationLandscapeMinRight = 240;
 
+  // Spot the error choice (section 6, redesigned 2026-10-30).
+
+  /// The ✓ and ✗ buttons inside the prompt card: 48×48, 44 in phone
+  /// landscape.
+  static const double spotErrorButton = 48;
+  static const double spotErrorButtonLandscape = 44;
+
+  /// Their icons: 22, 20 in phone landscape.
+  static const double spotErrorIcon = 22;
+  static const double spotErrorIconLandscape = 20;
+
+  /// Circled tick or cross in the Spot the error explanation card's heading
+  /// row: 20, 16 in phone landscape (as on the canvas; spec silent).
+  static const double explanationHeadingIcon = 20;
+  static const double explanationHeadingIconLandscape = 16;
+
   /// Session panel dots (current and to come).
   static const double sessionDot = 10;
 }

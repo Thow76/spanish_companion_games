@@ -8,8 +8,9 @@
 /// Repair and Spot the error prefill it with the sentence as shown, without
 /// the marks (`Question.promptText`), so the learner edits rather than
 /// retypes: the screen creates the controller with that text. A muted
-/// caption sits under it ([repairCaption], [spotErrorCaption]; none for
-/// Fill the gap).
+/// caption sits under it for Repair ([repairCaption]); none for Fill the
+/// gap or Spot the error. In Spot the error the field sits inside the
+/// prompt card in place of the sentence ([PromptCard.spotError]).
 ///
 /// After checking pass [AnswerFieldState.correct] or
 /// [AnswerFieldState.wrong]: the field is read-only, with a 2px mint or
@@ -50,6 +51,7 @@ class AnswerField extends StatefulWidget {
     this.focusNode,
     this.autofocus = false,
     this.semanticLabel = 'Your answer',
+    this.textStyle,
   });
 
   /// Holds the text. For Repair and Spot the error, create it with the
@@ -75,8 +77,17 @@ class AnswerField extends StatefulWidget {
   /// ", wrong" is added.
   final String semanticLabel;
 
+  /// The text style, if not the answer-field style (18, 16 in phone
+  /// landscape). Spot the error passes the prompt style (16/28), because
+  /// there the field takes the sentence's place inside the prompt card
+  /// (section 6, 2026-10-30).
+  final TextStyle? textStyle;
+
   /// Caption copy (section 6).
   static const String repairCaption = 'Change the marked words';
+
+  /// Spot the error has no caption since the 2026-10-30 redesign: the field
+  /// sits in the prompt card under the label [PromptCard.fixLabel] instead.
   static const String spotErrorCaption = 'Fix the sentence';
 
   /// Whether the learner has changed [text] from [original] (the prefilled
@@ -156,7 +167,7 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
     final minHeight = formFactor == FormFactor.phoneLandscape
         ? AppSizes.fieldLandscape
         : AppSizes.fieldPhone;
-    final textStyle = type.answerField;
+    final textStyle = widget.textStyle ?? type.answerField;
     final lineHeight = (textStyle.fontSize ?? 18) * (textStyle.height ?? 1.4);
     final look = _look;
 
@@ -240,11 +251,7 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
             if (icon != null) ...[
               const SizedBox(width: AppSpacing.s8),
               ExcludeSemantics(
-                child: Icon(
-                  icon,
-                  size: AppSizes.iconSmall,
-                  color: look.border,
-                ),
+                child: Icon(icon, size: AppSizes.iconSmall, color: look.border),
               ),
             ],
           ],

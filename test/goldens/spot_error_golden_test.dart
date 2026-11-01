@@ -1,9 +1,15 @@
-/// Screenshots of the Spot the error screen (B15) at the three sizes. UI
-/// spec section 11: a correct sentence and one that needs fixing; on phones
-/// the checked state with the toast showing and after it has gone.
+/// Screenshots of the Spot the error screen (B15; redesigned in U17, spec
+/// section 6 of 2026-10-30: ✓/✗ buttons inside the prompt card, the
+/// sentence turning into the field) at the three sizes. UI spec section
+/// 11: a correct sentence and one that needs fixing; on phones the checked
+/// state with the toast showing and after it has gone.
 ///
 /// - `spot-error_start_<size>`: question 1, nothing chosen.
-/// - `spot-error_fixing_<size>`: "It needs fixing" chosen, field prefilled.
+/// - `spot-error_fixing_<size>`: ✗ ("It needs fixing") chosen, the sentence
+///   in the card is now the field, prefilled.
+/// - `spot-error_switch-back_<size>` (U17): ✗ chosen, the field edited,
+///   then ✓ chosen: the sentence is back in the card (the typed text is
+///   kept for if ✗ is chosen again).
 /// - `spot-error_fixed_<size>`: the field edited, before checking.
 /// - `spot-error_checked-right[-toast]_<size>`: a wrong sentence fixed right
 ///   ("Corrected version" on the card).
@@ -17,8 +23,8 @@
 ///   (U12): a longer sentence, so the prompt card, the field and the
 ///   corrected version wrap (spec section 3: never truncated).
 /// - `spot-error_fix-wrong-320_phone` (U12): fixed wrongly at 320×640, the
-///   narrowest width: the two choices in one column, nothing sideways
-///   (spec sections 6 and 10).
+///   narrowest width: the ✓/✗ row still on one line inside the card,
+///   nothing sideways (spec sections 6 and 10).
 @Tags(['golden'])
 library;
 
@@ -91,10 +97,11 @@ void main() {
   }
 
   Future<void> pick(WidgetTester tester, String label) async {
-    // A long sentence can push the choices low on a landscape screen.
-    await tester.ensureVisible(find.text(label));
+    // The ✓/✗ buttons have no visible text; they are found by their
+    // tooltip. A long sentence can push them low on a landscape screen.
+    await tester.ensureVisible(find.byTooltip(label));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(label));
+    await tester.tap(find.byTooltip(label));
     await settle(tester);
   }
 
@@ -109,11 +116,7 @@ void main() {
         matchesGoldenFile(goldenName(_screen, state, size)),
       );
 
-  Future<void> check(
-    WidgetTester tester,
-    ScreenSize size,
-    String state,
-  ) async {
+  Future<void> check(WidgetTester tester, ScreenSize size, String state) async {
     await tester.tap(find.text('Check'));
     final phone = FormFactor.fromSize(size.size) != FormFactor.laptop;
     if (phone) {
@@ -140,6 +143,14 @@ void main() {
       await start(tester, size, [_pensando(), _depende()]);
       await pick(tester, SpotErrorChoice.needsFixingLabel);
       await shot(tester, size, 'fixing');
+    });
+
+    testWidgets('spot error switch back, ${size.name}', (tester) async {
+      await start(tester, size, [_pensando(), _depende()]);
+      await pick(tester, SpotErrorChoice.needsFixingLabel);
+      await type(tester, 'Estoy pensando en mudarme a Glasgow.');
+      await pick(tester, SpotErrorChoice.correctLabel);
+      await shot(tester, size, 'switch-back');
     });
 
     testWidgets('spot error fixed, ${size.name}', (tester) async {
@@ -175,9 +186,7 @@ void main() {
       await check(tester, size, 'correct-sentence');
     });
 
-    testWidgets('spot error long sentence fixed, ${size.name}', (
-      tester,
-    ) async {
+    testWidgets('spot error long sentence fixed, ${size.name}', (tester) async {
       await start(tester, size, [_demas(), _pensando()]);
       await pick(tester, SpotErrorChoice.needsFixingLabel);
       await type(tester, _demasRight);
@@ -210,10 +219,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump(const Duration(seconds: 3));
     await settle(tester);
-    // The two choices stack below 360px (spec section 6).
-    final correct = tester.getRect(find.text(SpotErrorChoice.correctLabel));
-    final fixing = tester.getRect(find.text(SpotErrorChoice.needsFixingLabel));
-    expect(fixing.top, greaterThan(correct.bottom));
+    // The ✓/✗ row stays on one line inside the screen (spec sections 6
+    // and 10).
+    final correct = tester.getRect(
+      find.byTooltip(SpotErrorChoice.correctLabel),
+    );
+    final fixing = tester.getRect(
+      find.byTooltip(SpotErrorChoice.needsFixingLabel),
+    );
+    expect(fixing.top, correct.top);
+    expect(fixing.right, lessThanOrEqualTo(320));
     await expectLater(
       find.byType(_App),
       matchesGoldenFile('spot-error_fix-wrong-320_phone.png'),
