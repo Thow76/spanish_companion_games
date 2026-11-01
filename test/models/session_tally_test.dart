@@ -62,4 +62,46 @@ void main() {
     expect(t.scoreFor(QuestionPhase.recall), (right: 1, answered: 2));
     expect(t.scoreFor(QuestionPhase.noticeAndCorrect).answered, 0);
   });
+
+  group('copied results (B17)', () {
+    test('header, then one line per question in the order first checked', () {
+      final day = DateTime(2026, 11, 1, 9, 30);
+      final t = SessionTally(clock: () => day)
+        ..record(_q('FB-0001', GameType.chooseCorrection), true)
+        ..record(_q('FB-0007', GameType.fillGap), false)
+        ..record(_q('FB-0003', GameType.repair), true);
+      expect(
+        t.resultsText(),
+        'Spanish Games results 2026-11-01\n'
+        'FB-0001, choose_correction, right, 2026-11-01\n'
+        'FB-0007, fill_gap, wrong, 2026-11-01\n'
+        'FB-0003, repair, right, 2026-11-01',
+      );
+    });
+
+    test('a question played again keeps its place with the latest result '
+        'and day', () {
+      var now = DateTime(2026, 10, 31, 23, 50);
+      final t = SessionTally(clock: () => now)
+        ..record(_q('FB-0001', GameType.chooseCorrection), false)
+        ..record(_q('FB-0002', GameType.chooseCorrection), true);
+      now = DateTime(2026, 11, 1, 0, 5);
+      t.record(_q('FB-0001', GameType.chooseCorrection), true);
+      expect(t.resultsText().split('\n'), [
+        'Spanish Games results 2026-11-01',
+        'FB-0001, choose_correction, right, 2026-11-01',
+        'FB-0002, choose_correction, right, 2026-10-31',
+      ]);
+      expect(t.entries.map((e) => e.id), ['FB-0001', 'FB-0002']);
+    });
+
+    test('an empty tally copies only the header', () {
+      final t = SessionTally(clock: () => DateTime(2026, 1, 5));
+      expect(t.resultsText(), 'Spanish Games results 2026-01-05');
+    });
+
+    test('dates are zero-padded', () {
+      expect(SessionTally.dateText(DateTime(2026, 3, 7)), '2026-03-07');
+    });
+  });
 }
