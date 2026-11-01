@@ -5,10 +5,13 @@
 /// explanation and "Next question"; a score for the session.
 ///
 /// Same frame as the other games (B3/B5): GameTopBar, ChipRow/CategoryChip,
-/// PromptCard (plain form), SpotErrorChoice with an AnswerField (U13) where
-/// the options would be, ExplanationCard, PrimaryButton, the result toast
-/// (phones) and the Session and Feedback panels (laptop). UI spec sections
-/// 5, 6, 8 and 10.
+/// ExplanationCard, PrimaryButton, the result toast (phones) and the
+/// Session and Feedback panels (laptop). Since U17 (spec section 6,
+/// redesigned 2026-10-30) there is no instruction above the card and no
+/// answer area under it: the ✓/✗ choice is inside the prompt card
+/// ([PromptCard.spotError]), and choosing ✗ turns the sentence into the
+/// AnswerField in place. On phones the explanation card carries a
+/// "Correct" / "Not quite" heading. UI spec sections 5, 6, 8 and 10.
 ///
 /// Checking uses [checkSpotError] from `lib/models/answer_check.dart`: the
 /// sentence is correct when it matches one of `answers`; both steps must be
@@ -31,11 +34,7 @@ import 'session_summary_view.dart';
 ///
 /// Questions from other games are skipped.
 class SpotErrorScreen extends StatefulWidget {
-  const SpotErrorScreen({
-    super.key,
-    required this.questions,
-    this.session,
-  });
+  const SpotErrorScreen({super.key, required this.questions, this.session});
 
   final List<Question> questions;
 
@@ -43,9 +42,6 @@ class SpotErrorScreen extends StatefulWidget {
   /// home screen. Each checked question is recorded in it. Null (tests)
   /// means the summary counts this round only.
   final SessionTally? session;
-
-  /// Instruction above the prompt card (spec section 8).
-  static const String instruction = 'Is this sentence correct?';
 
   @override
   State<SpotErrorScreen> createState() => _SpotErrorScreenState();
@@ -86,9 +82,7 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
 
   /// "Next question" gets keyboard focus after checking (spec section 10).
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
-  final FocusNode _topBarActionFocus = FocusNode(
-    debugLabel: 'Top bar action',
-  );
+  final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
 
   @override
   void initState() {
@@ -279,28 +273,28 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
           current: _index + 1,
           total: _total,
         ),
-      Text(SpotErrorScreen.instruction, style: type.caption),
-      PromptCard.plain(
+      PromptCard.spotError(
         sentence: q.promptText,
+        choice: SpotErrorChoice(
+          picked: _picked,
+          onPicked: _checked ? null : _onPicked,
+          checked: _checked,
+        ),
+        // While "It needs fixing" is chosen, the sentence becomes the field.
+        field: _picked == SpotErrorPick.needsFixing && !_checked
+            ? AnswerField(
+                // A new key per question, so the field's own state starts
+                // afresh.
+                key: ValueKey('spot-error-field-${q.id}'),
+                controller: _controller,
+                textStyle: type.prompt,
+                onChanged: _onChanged,
+                onSubmitted: (_) => _check(),
+                semanticLabel: PromptCard.fixLabel,
+              )
+            : null,
         // After checking, a wrong sentence shows "Corrected version".
         corrected: _checked && !sentenceWasCorrect ? accepted : null,
-      ),
-      SpotErrorChoice(
-        picked: _picked,
-        onPicked: _checked ? null : _onPicked,
-        sentenceWasCorrect: _checked ? sentenceWasCorrect : null,
-        field: AnswerField(
-          // A new key per question, so the field's own state starts afresh.
-          key: ValueKey('spot-error-field-${q.id}'),
-          controller: _controller,
-          state: !_checked
-              ? AnswerFieldState.editing
-              : (_correct ? AnswerFieldState.correct : AnswerFieldState.wrong),
-          caption: AnswerField.spotErrorCaption,
-          onChanged: _onChanged,
-          onSubmitted: (_) => _check(),
-          semanticLabel: 'Your corrected sentence',
-        ),
       ),
     ];
 
@@ -324,7 +318,9 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
         onAction: onAction,
         actionFocusNode: _topBarActionFocus,
       ),
-      explanation: content == null ? null : ExplanationCard(content: content),
+      explanation: content == null
+          ? null
+          : ExplanationCard(content: content, result: _correct),
       primaryButton: _checked
           ? PrimaryButton.next(
               onPressed: _next,

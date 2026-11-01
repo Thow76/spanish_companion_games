@@ -89,6 +89,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
     required this.chip,
     required this.homeBrand,
     required this.homeCount,
+    required this.spotErrorQuestion,
+    required this.explanationHeading,
   });
 
   final FormFactor formFactor;
@@ -178,6 +180,16 @@ class AppTypography extends ThemeExtension<AppTypography> {
   /// The question count on a phone game card. Sora 600 20; colour (the game
   /// accent) set by the card.
   final TextStyle homeCount;
+
+  /// "Is this sentence correct?" beside the Spot the error ✓/✗ buttons
+  /// (section 6). DM Sans 400 15/22 `textSecondary`; 14/20 in phone
+  /// landscape. `textMuted` after checking (set by the widget).
+  final TextStyle spotErrorQuestion;
+
+  /// "Correct" / "Not quite" heading on the Spot the error explanation card
+  /// (phones, section 6). Sora 600 16/22; 14/18 in phone landscape. Colour
+  /// set by the card.
+  final TextStyle explanationHeading;
 
   /// Styles for the current screen size. Falls back to building them from
   /// the media query if the theme has no [AppTypography].
@@ -298,6 +310,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
       chip: dm(12, 16, 500),
       homeBrand: sora(13, 18, 600, color: AppColors.accent),
       homeCount: sora(20, 28, 600),
+      spotErrorQuestion: isLandscape ? dm(14, 20, 400) : dm(15, 22, 400),
+      explanationHeading: isLandscape ? sora(14, 18, 600) : sora(16, 22, 600),
     );
   }
 

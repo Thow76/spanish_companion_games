@@ -1,5 +1,5 @@
-/// Gallery screenshots of the AnswerField and the Spot the error choice
-/// (U13), every state, at the three sizes. UI spec sections 6, 9, 10 and 11.
+/// Gallery screenshots of the AnswerField (U13) and the Spot the error
+/// card with its ✓/✗ choice (U17), every state, at the three sizes. UI spec sections 6, 9, 10 and 11.
 ///
 /// `widgets_field_<size>.png`, rendered at the screen's width with that
 /// size's layout rules but as tall as its contents:
@@ -7,10 +7,13 @@
 /// - Repair: prefilled with the sentence without marks (resting), focused,
 ///   edited, a long sentence that wraps, checked right, checked wrong.
 /// - Typed Fill the gap: empty, typed, checked right, checked wrong.
-/// - Spot the error: nothing chosen, "It's correct" chosen, "It needs
-///   fixing" chosen with the field shown, and after checking: correct
-///   sentence chosen right, chosen wrong, fixed right, fixed wrong.
-/// - Phone only: the choice at 320px wide, in one column.
+/// - Spot the error (U17, spec section 6 of 2026-10-30), the prompt card
+///   with the ✓/✗ row inside it: nothing chosen, ✓ chosen, ✗ chosen with
+///   the field in place of the sentence, and after checking: ✓ chosen for
+///   a correct sentence, ✓ chosen for a wrong one ("Corrected version"),
+///   ✗ chosen and fixed ("Corrected version", ✓ dimmed). The buttons keep
+///   their colour whether the learner was right or not.
+/// - Phone only: the card at 320px wide (the row still fits).
 @Tags(['golden'])
 library;
 
@@ -58,7 +61,10 @@ void main() {
       addTearDown(tester.view.reset);
 
       await tester.pumpWidget(
-        _GalleryApp(size: size, child: _FieldGallery(size: size)),
+        _GalleryApp(
+          size: size,
+          child: _FieldGallery(size: size),
+        ),
       );
       await settle(tester);
 
@@ -165,12 +171,7 @@ class _FieldGalleryState extends State<_FieldGallery> {
   late final _gapRight = _text('del');
   late final _gapWrong = _text('de');
 
-  late final _spotOpen = _text(_spotSentence);
-  late final _spotFixRight = _text(_spotFixed);
-  late final _spotFixWrong = _text(_spotWrong);
-  late final _spotHidden = _text(_spotSentence);
-  late final _spotHidden2 = _text(_spotCorrectSentence);
-  late final _spotHidden3 = _text(_spotCorrectSentence);
+  late final _spotOpen = _text(_spotWrong);
   late final _spotNarrow = _text(_spotSentence);
 
   @override
@@ -197,24 +198,29 @@ class _FieldGalleryState extends State<_FieldGallery> {
     AnswerFieldState state = AnswerFieldState.editing,
   }) => AnswerField(controller: c, state: state);
 
-  Widget _spotField(
-    TextEditingController c, {
-    AnswerFieldState state = AnswerFieldState.editing,
-  }) => AnswerField(
-    controller: c,
-    state: state,
-    caption: AnswerField.spotErrorCaption,
+  Widget _spotField(TextEditingController c) => Builder(
+    builder: (context) => AnswerField(
+      controller: c,
+      textStyle: AppTypography.of(context).prompt,
+      semanticLabel: PromptCard.fixLabel,
+    ),
   );
 
-  Widget _choice({
+  Widget _spotCard({
+    required String sentence,
     required SpotErrorPick? picked,
-    required Widget field,
-    bool? sentenceWasCorrect,
-  }) => SpotErrorChoice(
-    picked: picked,
-    onPicked: sentenceWasCorrect == null ? (_) {} : null,
-    sentenceWasCorrect: sentenceWasCorrect,
-    field: field,
+    TextEditingController? field,
+    bool checked = false,
+    String? corrected,
+  }) => PromptCard.spotError(
+    sentence: sentence,
+    choice: SpotErrorChoice(
+      picked: picked,
+      onPicked: checked ? null : (_) {},
+      checked: checked,
+    ),
+    field: field == null ? null : _spotField(field),
+    corrected: corrected,
   );
 
   @override
@@ -246,55 +252,48 @@ class _FieldGalleryState extends State<_FieldGallery> {
         _gap(_gapWrong, state: AnswerFieldState.wrong),
 
         const _Label('Spot the error: nothing chosen'),
-        _choice(picked: null, field: _spotField(_spotHidden)),
-        const _Label("Spot the error: \"It's correct\" chosen"),
-        _choice(
-          picked: SpotErrorPick.correct,
-          field: _spotField(_spotHidden2),
-        ),
-        const _Label('Spot the error: "It needs fixing" chosen, field shown'),
-        _choice(
+        _spotCard(sentence: _spotSentence, picked: null),
+        const _Label('Spot the error: ✓ chosen'),
+        _spotCard(sentence: _spotSentence, picked: SpotErrorPick.correct),
+        const _Label('Spot the error: ✗ chosen, the sentence is the field'),
+        _spotCard(
+          sentence: _spotSentence,
           picked: SpotErrorPick.needsFixing,
-          field: _spotField(_spotOpen),
+          field: _spotOpen,
         ),
-        const _Label('Checked: correct sentence, "It\'s correct" chosen'),
-        _choice(
+        const _Label('Checked: correct sentence, ✓ chosen (right)'),
+        _spotCard(
+          sentence: _spotCorrectSentence,
           picked: SpotErrorPick.correct,
-          sentenceWasCorrect: true,
-          field: _spotField(_spotHidden3),
+          checked: true,
         ),
-        const _Label('Checked: wrong sentence, "It\'s correct" chosen'),
-        _choice(
+        const _Label('Checked: wrong sentence, ✓ chosen (wrong)'),
+        _spotCard(
+          sentence: _spotSentence,
           picked: SpotErrorPick.correct,
-          sentenceWasCorrect: false,
-          field: const SizedBox.shrink(),
+          checked: true,
+          corrected: _spotFixed,
         ),
-        const _Label('Checked: "It needs fixing", fixed right'),
-        _choice(
+        const _Label('Checked: wrong sentence, ✗ chosen and fixed'),
+        _spotCard(
+          sentence: _spotSentence,
           picked: SpotErrorPick.needsFixing,
-          sentenceWasCorrect: false,
-          field: _spotField(_spotFixRight, state: AnswerFieldState.correct),
-        ),
-        const _Label('Checked: "It needs fixing", fixed wrong'),
-        _choice(
-          picked: SpotErrorPick.needsFixing,
-          sentenceWasCorrect: false,
-          field: _spotField(_spotFixWrong, state: AnswerFieldState.wrong),
+          checked: true,
+          corrected: _spotFixed,
         ),
 
         if (widget.size == ScreenSize.phone) ...[
-          const _Label('At 320px wide: the choice in one column'),
+          const _Label('At 320px wide: ✗ chosen, the row still fits'),
           Align(
             alignment: Alignment.topLeft,
             child: MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(size: const Size(320, 844)),
+              data: MediaQuery.of(context).copyWith(size: const Size(320, 844)),
               child: SizedBox(
                 width: 320 - 2 * AppSpacing.phoneMargin,
-                child: _choice(
+                child: _spotCard(
+                  sentence: _spotSentence,
                   picked: SpotErrorPick.needsFixing,
-                  field: _spotField(_spotNarrow),
+                  field: _spotNarrow,
                 ),
               ),
             ),

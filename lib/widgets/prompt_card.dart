@@ -3,18 +3,22 @@
 /// landscape, 28/28 laptop. The sentence (16/28) wraps onto as many lines
 /// as it needs; it is never truncated or shrunk to fit.
 ///
-/// Three forms:
+/// Four forms:
 /// - [PromptCard.gap] (Fill the gap): an inline slot for the missing word.
 /// - [PromptCard.marked] (Choose a correction, Repair): "Original version"
 ///   with the `**…**` words marked; after checking, "Corrected version"
 ///   with the changed words in `correct`.
-/// - [PromptCard.plain] (Sentence ordering, Spot the error): the sentence
-///   only; Spot the error shows the corrected version after checking.
+/// - [PromptCard.plain] (Sentence ordering): the sentence only.
+/// - [PromptCard.spotError] (Spot the error, redesigned 2026-10-30): the
+///   plain sentence, or the field in its place under "Fix the sentence",
+///   with the ✓/✗ choice inside the card under a hairline; after checking,
+///   "Corrected version" when the sentence was wrong.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
@@ -33,7 +37,7 @@ enum GapState {
   correct,
 }
 
-enum _Form { gap, marked, plain }
+enum _Form { gap, marked, plain, spotError }
 
 class PromptCard extends StatelessWidget {
   /// Fill the gap. [sentence] contains `___` where the gap goes. [fill] is
@@ -47,7 +51,9 @@ class PromptCard extends StatelessWidget {
   }) : _form = _Form.gap,
        missingWord = false,
        replacement = null,
-       corrected = null;
+       corrected = null,
+       field = null,
+       choice = null;
 
   /// Phase 1: Andrew's sentence with the problem words wrapped in `**…**`.
   ///
@@ -67,18 +73,45 @@ class PromptCard extends StatelessWidget {
     this.corrected,
   }) : _form = _Form.marked,
        fill = null,
-       gapState = GapState.empty;
+       gapState = GapState.empty,
+       field = null,
+       choice = null;
 
-  /// Sentence ordering and Spot the error: the sentence only, no label,
-  /// nothing marked. For Spot the error after checking, pass [corrected]
-  /// when the sentence was wrong: the card shows "Corrected version" and
-  /// the corrected sentence with the changed words in `correct`.
+  /// Sentence ordering: the sentence only, no label, nothing marked. If
+  /// [corrected] is passed and differs from the sentence, the card shows
+  /// "Corrected version" with the changed words in `correct`.
   const PromptCard.plain({super.key, required this.sentence, this.corrected})
     : _form = _Form.plain,
       fill = null,
       gapState = GapState.empty,
       missingWord = false,
-      replacement = null;
+      replacement = null,
+      field = null,
+      choice = null;
+
+  /// Spot the error (section 6, redesigned 2026-10-30).
+  ///
+  /// - [choice]: the [SpotErrorChoice] row, drawn inside the card under
+  ///   the sentence (it brings its own hairline).
+  /// - [field]: while "It needs fixing" is chosen and not yet checked, the
+  ///   AnswerField, shown in place of the sentence under the label
+  ///   [fixLabel] (150 ms, none with reduced motion), so the sentence is
+  ///   shown only once. Null shows the sentence.
+  /// - [corrected]: after checking, when the sentence was wrong, the
+  ///   corrected sentence; the card shows "Corrected version" in place of
+  ///   the field or sentence, changed words in `correct`. Null after
+  ///   checking a correct sentence: the sentence as it was.
+  const PromptCard.spotError({
+    super.key,
+    required this.sentence,
+    required Widget this.choice,
+    this.field,
+    this.corrected,
+  }) : _form = _Form.spotError,
+       fill = null,
+       gapState = GapState.empty,
+       missingWord = false,
+       replacement = null;
 
   final _Form _form;
   final String sentence;
@@ -87,6 +120,11 @@ class PromptCard extends StatelessWidget {
   final bool missingWord;
   final String? replacement;
   final String? corrected;
+  final Widget? field;
+  final Widget? choice;
+
+  /// The label above the Spot the error field (section 8).
+  static const String fixLabel = 'Fix the sentence';
 
   static const String originalLabel = 'Original version';
   static const String correctedLabel = 'Corrected version';
@@ -131,7 +169,54 @@ class PromptCard extends StatelessWidget {
           }
         case _Form.plain:
           children.add(Text(original, style: type.prompt, softWrap: true));
+        case _Form.spotError:
+          if (field != null) {
+            children
+              ..add(Text(fixLabel, style: type.promptLabel))
+              ..add(const SizedBox(height: AppSpacing.s8))
+              ..add(field!);
+          } else {
+            children.add(Text(original, style: type.prompt, softWrap: true));
+          }
       }
+    }
+
+    Widget body = Column(
+      crossAxisAlignment: _form == _Form.spotError
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+    if (_form == _Form.spotError) {
+      // The sentence turns into the field (and back) in place: a short
+      // cross-fade while the card grows or shrinks (section 6 and 9).
+      final duration = AppMotion.duration(context);
+      final mode = showCorrected
+          ? 'corrected'
+          : (field != null ? 'field' : 'sentence');
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSize(
+            duration: duration,
+            curve: AppMotion.curve,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: duration,
+              switchInCurve: AppMotion.curve,
+              switchOutCurve: AppMotion.curve,
+              layoutBuilder: (current, previous) => Stack(
+                alignment: Alignment.topLeft,
+                children: [...previous, ?current],
+              ),
+              child: KeyedSubtree(key: ValueKey(mode), child: body),
+            ),
+          ),
+          ?choice,
+        ],
+      );
     }
 
     return Container(
@@ -141,11 +226,7 @@ class PromptCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: AppRadius.cardAll,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
+      child: body,
     );
   }
 
@@ -325,10 +406,7 @@ class _InlineHighlight extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(minWidth: minWidth),
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: borderRadius,
-          ),
+          decoration: BoxDecoration(color: fill, borderRadius: borderRadius),
           child: CustomPaint(
             foregroundPainter: _UnderlinePainter(underline),
             child: child,
