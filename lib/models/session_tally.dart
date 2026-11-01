@@ -10,6 +10,12 @@
 /// Each question counts once: if it is played again ("Play again"), the
 /// latest result replaces the earlier one, so the tally says where Andrew
 /// stands now rather than how many attempts he has made.
+///
+/// B17: the tally also keeps each question's game and the day it was
+/// checked, so the summary can copy a plain-text list of results
+/// ([resultsText]) for Andrew to paste into the ChatGPT companion, which
+/// updates the Test Review sheet. The question `id` is the sheet's Item ID
+/// (FB-0001, …), so each line maps back to a sheet row.
 library;
 
 import 'question.dart';
@@ -17,8 +23,20 @@ import 'question.dart';
 /// Right and answered counts for one phase.
 typedef PhaseScore = ({int right, int answered});
 
+/// One checked question, as kept by the tally.
+typedef TallyEntry = ({
+  String id,
+  GameType game,
+  QuestionPhase phase,
+  bool right,
+  DateTime checkedAt,
+});
+
 class SessionTally {
-  SessionTally();
+  /// [clock] gives the time a question is checked; tests pass a fixed one.
+  SessionTally({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+
+  final DateTime Function() _clock;
 
   /// A tally of one round only, for a game screen opened without a shared
   /// tally (tests, or a screen opened on its own). [results] holds one
@@ -35,13 +53,24 @@ class SessionTally {
     return tally;
   }
 
-  /// Latest result per question id, with the question's phase.
-  final Map<String, ({QuestionPhase phase, bool right})> _results = {};
+  /// Latest result per question id. A map keeps the order in which each id
+  /// was first checked, even when a later result replaces an earlier one.
+  final Map<String, TallyEntry> _results = {};
 
   /// Records the result of a checked question.
   void record(Question question, bool right) {
-    _results[question.id] = (phase: question.phase, right: right);
+    _results[question.id] = (
+      id: question.id,
+      game: question.game,
+      phase: question.phase,
+      right: right,
+      checkedAt: _clock(),
+    );
   }
+
+  /// Every question checked this session, in the order first checked, each
+  /// with its latest result.
+  List<TallyEntry> get entries => List.unmodifiable(_results.values);
 
   /// The score for one phase.
   PhaseScore scoreFor(QuestionPhase phase) {
@@ -63,4 +92,40 @@ class SessionTally {
   static String scoreText(PhaseScore score) => score.answered == 0
       ? 'None yet'
       : '${score.right} of ${score.answered} right';
+
+  /// Header of the copied results ("Spanish Games results 2026-11-01").
+  static String resultsHeader(DateTime day) =>
+      'Spanish Games results ${dateText(day)}';
+
+  /// The plain-text list copied by "Copy results" (B17): a header line,
+  /// then one line per question checked this session, in the order first
+  /// checked:
+  ///
+  /// ```
+  /// Spanish Games results 2026-11-01
+  /// FB-0001, choose_correction, right, 2026-11-01
+  /// FB-0007, fill_gap, wrong, 2026-11-01
+  /// ```
+  ///
+  /// Fields are the question's `id`, its `game` value as in
+  /// `questions.json`, "right" or "wrong", and the day it was checked
+  /// (local time, YYYY-MM-DD). [now] is the day in the header (default: the
+  /// tally's clock).
+  String resultsText({DateTime? now}) {
+    final lines = <String>[resultsHeader(now ?? _clock())];
+    for (final e in _results.values) {
+      lines.add(
+        '${e.id}, ${e.game.jsonValue}, ${e.right ? 'right' : 'wrong'}, '
+        '${dateText(e.checkedAt)}',
+      );
+    }
+    return lines.join('\n');
+  }
+
+  /// YYYY-MM-DD in local time.
+  static String dateText(DateTime t) {
+    final local = t.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)}';
+  }
 }

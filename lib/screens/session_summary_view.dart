@@ -20,9 +20,19 @@
 /// its chip row reading "Question 2 of 3" as the laptop session panel's rows
 /// do, with 24 between blocks so one question's cards are not read as the
 /// next one's.
+///
+/// B17: "Copy results" copies a plain-text list of every question checked
+/// since the app was opened ([SessionTally.resultsText]) for Andrew to paste
+/// into the ChatGPT companion. On phones it sits straight under the "All
+/// games so far" card, as it copies that whole session rather than this
+/// round; on laptop it is in the side panel under "Play again". After
+/// copying, a caption under it confirms how many results were copied. The
+/// spec has no drawing of it, so it is a secondary (outlined) button in the
+/// theme's style, so it does not compete with "Play again" (for U9).
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
@@ -84,11 +94,13 @@ class SessionSummaryView extends StatelessWidget {
     final type = AppTypography.of(context);
     final tally = session ?? SessionTally.fromRound(questions, results);
     final wrong = _wrong;
+    final laptop = FormFactor.of(context) == FormFactor.laptop;
 
     final rows = <Widget>[
       Semantics(header: true, child: Text(title, style: type.cardTitle)),
       Text(scoreText(_score, questions.length), style: type.body),
       _SessionScores(tally: tally),
+      if (!laptop) CopyResultsButton(tally: tally),
       if (wrong.isEmpty)
         Text(allRightText, style: type.caption)
       else ...[
@@ -119,7 +131,6 @@ class SessionSummaryView extends StatelessWidget {
       ],
     ];
 
-    final laptop = FormFactor.of(context) == FormFactor.laptop;
     final playAgain = PrimaryButton(
       label: 'Play again',
       onPressed: onPlayAgain,
@@ -149,9 +160,97 @@ class SessionSummaryView extends StatelessWidget {
           sessionPanel,
           const SizedBox(height: AppSpacing.s16),
           playAgain,
+          const SizedBox(height: AppSpacing.s12),
+          CopyResultsButton(tally: tally),
         ],
       ),
       children: rows,
+    );
+  }
+}
+
+/// "Copy results" (B17): copies [SessionTally.resultsText] to the
+/// clipboard, then says so in a caption under the button (a live region,
+/// so screen readers hear it). Full width, 52 high like the primary button.
+class CopyResultsButton extends StatefulWidget {
+  const CopyResultsButton({super.key, required this.tally});
+
+  final SessionTally tally;
+
+  static const String label = 'Copy results';
+  static const String againLabel = 'Copy again';
+  static const String failedText = "Couldn't copy the results. Try again.";
+
+  /// "Copied 3 results. Paste them into your Spanish Daily Companion."
+  static String copiedText(int count) =>
+      'Copied $count ${count == 1 ? 'result' : 'results'}. '
+      'Paste them into your Spanish Daily Companion.';
+
+  @override
+  State<CopyResultsButton> createState() => _CopyResultsButtonState();
+}
+
+enum _CopyState { idle, copied, failed }
+
+class _CopyResultsButtonState extends State<CopyResultsButton> {
+  _CopyState _state = _CopyState.idle;
+  int _count = 0;
+
+  Future<void> _copy() async {
+    final count = widget.tally.answered;
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.tally.resultsText()));
+      if (!mounted) return;
+      setState(() {
+        _state = _CopyState.copied;
+        _count = count;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _state = _CopyState.failed);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    final copied = _state == _CopyState.copied;
+    final message = switch (_state) {
+      _CopyState.idle => null,
+      _CopyState.copied => CopyResultsButton.copiedText(_count),
+      _CopyState.failed => CopyResultsButton.failedText,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FocusRing(
+          radius: AppRadius.control,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSizes.primaryButton,
+            ),
+            child: OutlinedButton.icon(
+              onPressed: widget.tally.answered == 0 ? null : _copy,
+              icon: Icon(
+                copied ? Icons.check_rounded : Icons.content_copy_rounded,
+                size: AppSizes.iconSmall,
+              ),
+              label: Text(
+                copied ? CopyResultsButton.againLabel : CopyResultsButton.label,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+        if (message != null) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Semantics(
+            liveRegion: true,
+            child: Text(message, style: type.caption),
+          ),
+        ],
+      ],
     );
   }
 }
