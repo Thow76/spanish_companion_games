@@ -297,12 +297,15 @@ class _SessionScores extends StatelessWidget {
     return Semantics(
       label: '${phase.label}: $score',
       child: ExcludeSemantics(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+        // A Wrap rather than a Row (spec section 10): with large text the
+        // score moves under the label instead of squeezing it until
+        // "corrections" breaks mid-word.
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: AppSpacing.s12,
           children: [
-            Expanded(child: Text(phase.label, style: type.body)),
-            const SizedBox(width: AppSpacing.s12),
+            Text(phase.label, style: type.body),
             Text(score, style: type.caption),
           ],
         ),

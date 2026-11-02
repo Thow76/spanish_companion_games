@@ -26,6 +26,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
@@ -472,15 +473,26 @@ class _Lines extends StatelessWidget {
   }
 
   Widget _row(AppTypography type, String label, Widget value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: AppSizes.explanationLabelColumn,
-          child: Text(label, style: type.explanationRowLabel),
-        ),
-        Expanded(child: value),
-      ],
+    return Builder(
+      builder: (context) {
+        final labelText = Text(label, style: type.explanationRowLabel);
+        // With large text (spec section 10) the 80-wide label column would
+        // break "Meaning" mid-word, so the label goes above its value.
+        if (AppLayout.isLargeText(context)) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [labelText, value],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: AppSizes.explanationLabelColumn, child: labelText),
+            Expanded(child: value),
+          ],
+        );
+      },
     );
   }
 }

@@ -12,6 +12,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
@@ -152,62 +153,107 @@ class _PhoneContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = AppTypography.of(context);
     final hasQuestions = card.count > 0;
+    // With large text (spec section 10) the card stacks: icon tile, title,
+    // description, count, so the title gets the card's full width and
+    // wraps between words rather than inside them.
+    final stacked = AppLayout.isLargeText(context);
+    final title = Text(
+      card.title,
+      style: hasQuestions
+          ? type.cardTitle
+          : type.cardTitle.copyWith(color: AppColors.textMuted),
+    );
+    final description = Text(card.description, style: type.cardDescription);
+    final tile = _IconTile(
+      game: card.game,
+      accent: accent,
+      size: AppSizes.gameTilePhone,
+      enabled: hasQuestions,
+    );
+    if (stacked) {
+      // Large text: icon tile on top, then title, description and count,
+      // each the full width of the card.
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.s16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            tile,
+            const SizedBox(height: AppSpacing.s12),
+            title,
+            const SizedBox(height: AppSpacing.s4),
+            description,
+            const SizedBox(height: AppSpacing.s8),
+            if (hasQuestions)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${card.count} ',
+                      style: type.caption
+                          .withWeight(600)
+                          .copyWith(color: accent),
+                    ),
+                    TextSpan(text: card.count == 1 ? 'question' : 'questions'),
+                  ],
+                ),
+                style: type.caption,
+              )
+            else
+              Text(GameCard.countText(0), style: type.caption),
+          ],
+        ),
+      );
+    }
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: AppSizes.gameCardPhone),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.s16),
         child: Row(
           children: [
-            _IconTile(
-              game: card.game,
-              accent: accent,
-              size: AppSizes.gameTilePhone,
-              enabled: hasQuestions,
-            ),
+            tile,
             const SizedBox(width: AppSpacing.s16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    card.title,
-                    style: hasQuestions
-                        ? type.cardTitle
-                        : type.cardTitle.copyWith(color: AppColors.textMuted),
-                  ),
+                  title,
                   const SizedBox(height: AppSpacing.s4),
-                  Text(card.description, style: type.cardDescription),
+                  description,
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.s12),
-            if (hasQuestions)
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${card.count}',
-                    style: type.homeCount.copyWith(color: accent),
+            ...[
+              const SizedBox(width: AppSpacing.s12),
+              if (hasQuestions)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${card.count}',
+                      style: type.homeCount.copyWith(color: accent),
+                    ),
+                    Text(
+                      card.count == 1 ? 'question' : 'questions',
+                      style: type.caption,
+                    ),
+                  ],
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSizes.gameCardCountMaxWidth,
                   ),
-                  Text(
-                    card.count == 1 ? 'question' : 'questions',
+                  child: Text(
+                    GameCard.countText(0),
                     style: type.caption,
+                    textAlign: TextAlign.end,
                   ),
-                ],
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: AppSizes.gameCardCountMaxWidth,
                 ),
-                child: Text(
-                  GameCard.countText(0),
-                  style: type.caption,
-                  textAlign: TextAlign.end,
-                ),
-              ),
+            ],
           ],
         ),
       ),
