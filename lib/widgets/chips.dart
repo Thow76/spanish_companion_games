@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 
@@ -90,16 +91,27 @@ class ChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chip = CategoryChip(type: type, category: category);
+    final count = Count(current: current, total: total);
+    // With large text (spec section 10) a Wrap: the count moves under the
+    // chip instead of squeezing it until words break. Otherwise a Row, so a
+    // long category wraps inside the chip and the count stays on the right.
+    if (AppLayout.isLargeText(context)) {
+      return Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.s12,
+        runSpacing: AppSpacing.s8,
+        children: [chip, count],
+      );
+    }
     return Row(
       children: [
         Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: CategoryChip(type: type, category: category),
-          ),
+          child: Align(alignment: Alignment.centerLeft, child: chip),
         ),
         const SizedBox(width: AppSpacing.s12),
-        Count(current: current, total: total),
+        count,
       ],
     );
   }

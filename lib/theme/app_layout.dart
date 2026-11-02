@@ -12,6 +12,23 @@ import 'app_spacing.dart';
 import 'form_factor.dart';
 
 abstract final class AppLayout {
+  /// Text scale from which the layout treats the text as large (spec
+  /// section 10: works at 200%). At or above it the phone GameCard puts its
+  /// count under the description instead of in a column at the right, so
+  /// the title keeps its width.
+  static const double largeTextScale = 1.3;
+
+  /// Largest size, in logical pixels, a title grows to with the text size
+  /// setting: the spec's largest type size (laptop screen title, section
+  /// 3). Keeps a long word such as "correction" on one line at 200% on a
+  /// 320 phone instead of breaking it mid-word. Titles only; question
+  /// content is never capped.
+  static const double maxTitleFontSize = 36;
+
+  /// Whether the text size setting makes text large ([largeTextScale]).
+  static bool isLargeText(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(100) / 100 >= largeTextScale;
+
   /// Widest the single column may be (phone landscape home, 600–1023), not
   /// counting the side padding.
   static const double columnMaxWidth = 640;

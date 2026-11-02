@@ -138,15 +138,18 @@ class SessionPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+              // A Wrap rather than a Row (spec section 10): with large text
+              // the score moves under the heading instead of squeezing it
+              // until "session" breaks mid-word.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: AppSpacing.s12,
+                runSpacing: AppSpacing.s4,
                 children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('This session', style: type.phaseHeading),
-                    ),
+                  Semantics(
+                    header: true,
+                    child: Text('This session', style: type.phaseHeading),
                   ),
                   // The score shows once something has been checked, so
                   // it never reads "0 of 0 correct".

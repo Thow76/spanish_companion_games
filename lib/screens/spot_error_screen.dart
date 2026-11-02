@@ -84,6 +84,11 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
   final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
 
+  /// The field takes focus when "It needs fixing" is chosen, so a keyboard
+  /// user can type straight away instead of tabbing into it (spec section
+  /// 10; PR #32 review note).
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'Fix the sentence');
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +106,7 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
     _controller.dispose();
     _nextButtonFocus.dispose();
     _topBarActionFocus.dispose();
+    _fieldFocus.dispose();
     super.dispose();
   }
 
@@ -131,6 +137,14 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
   void _onPicked(SpotErrorPick pick) {
     if (_checked) return;
     setState(() => _picked = pick);
+    if (pick == SpotErrorPick.needsFixing) {
+      // The field is built in this frame; focus it once it is there.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _picked == SpotErrorPick.needsFixing && !_checked) {
+          _fieldFocus.requestFocus();
+        }
+      });
+    }
   }
 
   void _onChanged(String _) {
@@ -287,6 +301,7 @@ class _SpotErrorScreenState extends State<SpotErrorScreen> {
                 // afresh.
                 key: ValueKey('spot-error-field-${q.id}'),
                 controller: _controller,
+                focusNode: _fieldFocus,
                 textStyle: type.prompt,
                 onChanged: _onChanged,
                 onSubmitted: (_) => _check(),

@@ -15,6 +15,7 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import 'app_icon_button.dart';
+import 'title_text.dart';
 import 'focus_ring.dart';
 
 class HomeTopBar extends StatelessWidget {
@@ -51,7 +52,7 @@ class HomeTopBar extends StatelessWidget {
               const SizedBox(height: AppSpacing.s4),
               Semantics(
                 header: true,
-                child: Text(phoneTitle, style: type.screenTitle),
+                child: TitleText(phoneTitle, style: type.screenTitle),
               ),
               const SizedBox(height: AppSpacing.s4),
               Text(source, style: type.caption),
@@ -79,7 +80,7 @@ class HomeTopBar extends StatelessWidget {
               header: true,
               label: '$brand Games',
               excludeSemantics: true,
-              child: Text.rich(
+              child: TitleText.rich(
                 TextSpan(
                   text: '$brand ',
                   children: const [

@@ -78,7 +78,7 @@ SessionSummaryView _summary({
 String _phaseScore(WidgetTester tester, QuestionPhase phase) {
   final row = find.ancestor(
     of: find.text(phase.label),
-    matching: find.byType(Row),
+    matching: find.byType(Wrap),
   );
   final texts = tester
       .widgetList<Text>(

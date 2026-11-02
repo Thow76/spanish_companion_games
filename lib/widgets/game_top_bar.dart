@@ -23,6 +23,7 @@ import '../theme/form_factor.dart';
 import 'app_icon_button.dart';
 import 'chips.dart';
 import 'focus_ring.dart';
+import 'title_text.dart';
 
 class GameTopBar extends StatelessWidget {
   const GameTopBar({
@@ -75,7 +76,7 @@ class GameTopBar extends StatelessWidget {
         Expanded(
           child: Semantics(
             header: true,
-            child: Text(title, style: type.gameTitle),
+            child: TitleText(title, style: type.gameTitle),
           ),
         ),
       ],
@@ -93,7 +94,7 @@ class GameTopBar extends StatelessWidget {
           Expanded(
             child: Semantics(
               header: true,
-              child: Text(title, style: type.gameTitle),
+              child: TitleText(title, style: type.gameTitle),
             ),
           ),
           const SizedBox(width: AppSpacing.s16),
@@ -124,7 +125,7 @@ class GameTopBar extends StatelessWidget {
           Expanded(
             child: Semantics(
               header: true,
-              child: Text(title, style: type.gameTitle),
+              child: TitleText(title, style: type.gameTitle),
             ),
           ),
           if (current != null && total != null) ...[
@@ -189,7 +190,8 @@ class _TopBarAction extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(label, style: style),
+                    // Same size as the title (section 6), so capped the same.
+                    TitleText(label, style: style),
                     Icon(
                       Icons.chevron_right_rounded,
                       size: AppSizes.glyph,

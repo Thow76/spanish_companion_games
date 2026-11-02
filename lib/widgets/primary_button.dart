@@ -58,7 +58,9 @@ class PrimaryButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, textAlign: TextAlign.center),
+          // Flexible so a long label at a large text size (section 10:
+          // 200%) wraps inside the button instead of overflowing it.
+          Flexible(child: Text(label, textAlign: TextAlign.center)),
           if (trailingIcon != null) ...[
             const SizedBox(width: AppSpacing.s8),
             Icon(trailingIcon, size: AppSizes.iconSmall),
