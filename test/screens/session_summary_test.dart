@@ -7,7 +7,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
+import 'package:spanish_companion_games/data/results_sync.dart';
 import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/session_tally.dart';
 import 'package:spanish_companion_games/screens/choose_correction_screen.dart';
@@ -320,6 +323,67 @@ void main() {
       expect(copy.left, closeTo(play.left, 1));
       // On screen, however long the list.
       expect(copy.bottom, lessThanOrEqualTo(800));
+    });
+  });
+
+  group('results sent to Test Review (B18)', () {
+    testWidgets('no status line when the app does not send results', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(
+          _summary(
+            questions: [_pensando()],
+            results: [true],
+            session: SessionTally()..record(_pensando(), true),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ResultsSyncStatus), findsNothing);
+    });
+
+    testWidgets('a failed send says so, and Send again saves it', (
+      tester,
+    ) async {
+      var fail = true;
+      final client = MockClient((request) async {
+        if (fail) return http.Response('error', 500);
+        return http.Response(
+          '{"ok": true, "saved": ["2026-10-17-001"], "unknown": []}',
+          200,
+        );
+      });
+      final sync = ResultsSync(
+        const ResultsConfig('https://script.google.com/macros/s/x/exec'),
+        client: client,
+      );
+      final session = SessionTally(sync: sync);
+      await tester.runAsync(() async {
+        session.record(_pensando(), false);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpWidget(
+        _app(
+          _summary(
+            questions: [_pensando()],
+            results: [false],
+            session: session,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(ResultsSyncStatus.failedText(1)), findsOneWidget);
+
+      fail = false;
+      await tester.ensureVisible(find.text(ResultsSyncStatus.retryLabel));
+      await tester.runAsync(() async {
+        await tester.tap(find.text(ResultsSyncStatus.retryLabel));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text(ResultsSyncStatus.savedText), findsOneWidget);
+      expect(find.text(ResultsSyncStatus.retryLabel), findsNothing);
     });
   });
 }

@@ -29,11 +29,16 @@
 /// copying, a caption under it confirms how many results were copied. The
 /// spec has no drawing of it, so it is a secondary (outlined) button in the
 /// theme's style, so it does not compete with "Play again" (for U9).
+///
+/// B18: when the app sends results straight to the Test Review sheet, a
+/// status line under "Copy results" says whether they are saved, with
+/// "Send again" if a send failed.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/results_sync.dart';
 import '../models/answer_check.dart';
 import '../models/question.dart';
 import '../models/session_tally.dart';
@@ -101,6 +106,7 @@ class SessionSummaryView extends StatelessWidget {
       Text(scoreText(_score, questions.length), style: type.body),
       _SessionScores(tally: tally),
       if (!laptop) CopyResultsButton(tally: tally),
+      if (!laptop && tally.sync != null) ResultsSyncStatus(sync: tally.sync!),
       if (wrong.isEmpty)
         Text(allRightText, style: type.caption)
       else ...[
@@ -162,6 +168,10 @@ class SessionSummaryView extends StatelessWidget {
           playAgain,
           const SizedBox(height: AppSpacing.s12),
           CopyResultsButton(tally: tally),
+          if (tally.sync != null) ...[
+            const SizedBox(height: AppSpacing.s12),
+            ResultsSyncStatus(sync: tally.sync!),
+          ],
         ],
       ),
       children: rows,
@@ -251,6 +261,74 @@ class _CopyResultsButtonState extends State<CopyResultsButton> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Whether the results reached the Test Review sheet (B18): a caption (a
+/// live region), and "Send again" after a failed send.
+class ResultsSyncStatus extends StatelessWidget {
+  const ResultsSyncStatus({super.key, required this.sync});
+
+  final ResultsSync sync;
+
+  static const String sendingText = 'Saving your results to Test Review…';
+  static const String savedText = 'Results saved to Test Review.';
+  static const String retryLabel = 'Send again';
+
+  /// "2 results not saved yet. Check your connection and send again."
+  static String failedText(int count) =>
+      '$count ${count == 1 ? 'result' : 'results'} not saved yet. '
+      'Check your connection and send again.';
+
+  /// "1 result has no row in Test Review, so it was not saved."
+  static String unknownText(int count) =>
+      '$count ${count == 1 ? 'result has' : 'results have'} no row in '
+      'Test Review, so ${count == 1 ? 'it was' : 'they were'} not saved.';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final message = switch (sync.state) {
+          ResultsSyncState.idle => null,
+          ResultsSyncState.sending => sendingText,
+          ResultsSyncState.saved => savedText,
+          ResultsSyncState.failed => failedText(sync.pending),
+        };
+        final unknown = sync.unknown.length;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message != null)
+              Semantics(
+                liveRegion: true,
+                child: Text(message, style: type.caption),
+              ),
+            if (unknown > 0) ...[
+              const SizedBox(height: AppSpacing.s4),
+              Text(unknownText(unknown), style: type.caption),
+            ],
+            if (sync.state == ResultsSyncState.failed) ...[
+              const SizedBox(height: AppSpacing.s8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: sync.send,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    size: AppSizes.iconSmall,
+                  ),
+                  label: const Text(retryLabel),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
