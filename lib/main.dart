@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/drive_source.dart';
+import 'data/results_sync.dart';
 import 'screens/home_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/form_factor.dart';
@@ -12,6 +13,11 @@ void main() {
 /// The Drive key and file ID, if the app was run or built with them (B8).
 /// Without them the home screen loads the bundled sample file.
 const DriveConfig _drive = DriveConfig.fromEnvironment();
+
+/// The Test Review sheet's web app address, if given (B18): each checked
+/// question's result is sent there. Without it, "Copy results" only.
+const ResultsConfig _results = ResultsConfig.fromEnvironment();
+final ResultsSync? _sync = _results.isConfigured ? ResultsSync(_results) : null;
 
 /// Root of the app: theme plus the home screen.
 class SpanishGamesApp extends StatelessWidget {
@@ -33,8 +39,9 @@ class SpanishGamesApp extends StatelessWidget {
           ? HomeScreen(
               source: () => loadQuestionsFromDrive(_drive),
               sourceName: driveSourceName,
+              resultsSync: _sync,
             )
-          : const HomeScreen(),
+          : HomeScreen(resultsSync: _sync),
     );
   }
 }

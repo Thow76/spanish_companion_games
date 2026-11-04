@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import '../data/drive_source.dart';
 import '../data/question_loader.dart';
+import '../data/results_sync.dart';
 import '../models/question.dart';
 import '../models/question_filter.dart';
 import '../models/question_parser.dart';
@@ -46,6 +47,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.source = loadQuestionsFromAsset,
     this.sourceName = sampleSourceName,
+    this.resultsSync,
   });
 
   /// Where the questions come from. Defaults to the bundled sample file.
@@ -56,6 +58,10 @@ class HomeScreen extends StatefulWidget {
   /// source line ("9 questions · sample file"); "Google Drive" when loading
   /// from Drive (B8).
   final String sourceName;
+
+  /// Sends each checked question's result to the Test Review sheet (B18),
+  /// when the app is run with `RESULTS_URL`; null otherwise.
+  final ResultsSync? resultsSync;
 
   static const String sampleSourceName = 'sample file';
 
@@ -68,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Every question checked since the app was opened, across the games
   /// (B7). Kept when the questions are reloaded.
-  final SessionTally _session = SessionTally();
+  late final SessionTally _session = SessionTally(sync: widget.resultsSync);
 
   /// What to play (B12). Kept when the questions are reloaded.
   QuestionFilter _filter = QuestionFilter.all;

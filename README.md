@@ -24,6 +24,7 @@ deploy, from the repo root, after `firebase login`:
 ```sh
 export DRIVE_API_KEY=<key>
 export DRIVE_FILE_ID=<file id>
+export RESULTS_URL=<web app /exec address>   # optional
 ./deploy.sh
 ```
 
@@ -32,3 +33,12 @@ The script stops with a message if either value is missing. It runs
 `firebase deploy --only hosting`. Never commit the key or the file ID.
 After the first deploy, add the hosting address (`https://<project>.web.app/*`)
 to the API key's allowed websites in Google Cloud.
+
+## Sending results to Test Review
+
+When the app is run or built with `RESULTS_URL` (the `/exec` address of the
+Test Review sheet's Apps Script, deployed as a web app), every checked
+question is sent to it and the script fills in Test Review. For local runs,
+add `"RESULTS_URL": "…"` to `drive.json` and run
+`flutter run -d chrome --web-port 5000 --dart-define-from-file=drive.json`.
+Without it, "Copy results" is the only way to record results.

@@ -4,6 +4,7 @@
 # Usage (from the repo root):
 #   export DRIVE_API_KEY=<key>
 #   export DRIVE_FILE_ID=<file id>
+#   export RESULTS_URL=<Test Review web app /exec address>   # optional (B18)
 #   ./deploy.sh
 #
 # The key and file ID are passed to the build with --dart-define and are
@@ -34,10 +35,20 @@ for tool in flutter firebase; do
   fi
 done
 
-echo "Building the web app (release)..."
-flutter build web --release \
-  --dart-define="DRIVE_API_KEY=${DRIVE_API_KEY}" \
+defines=(
+  --dart-define="DRIVE_API_KEY=${DRIVE_API_KEY}"
   --dart-define="DRIVE_FILE_ID=${DRIVE_FILE_ID}"
+)
+if [[ -n "${RESULTS_URL:-}" ]]; then
+  defines+=(--dart-define="RESULTS_URL=${RESULTS_URL}")
+  echo "Results will be sent to the Test Review sheet."
+else
+  echo "Note: RESULTS_URL not set, so results will not be sent to Test Review"
+  echo "(Copy results still works)."
+fi
+
+echo "Building the web app (release)..."
+flutter build web --release "${defines[@]}"
 
 echo "Deploying build/web to Firebase Hosting..."
 firebase deploy --only hosting

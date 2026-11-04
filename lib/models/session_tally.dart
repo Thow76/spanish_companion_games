@@ -16,8 +16,12 @@
 /// ([resultsText]) for Andrew to paste into the ChatGPT companion, which
 /// updates the Test Review sheet. The question `id` is the sheet's Item ID
 /// (FB-0001, …), so each line maps back to a sheet row.
+///
+/// B18: when the app is run with `RESULTS_URL`, the tally also hands each
+/// result to its [sync], which sends it straight to the Test Review sheet.
 library;
 
+import '../data/results_sync.dart';
 import 'question.dart';
 
 /// Right and answered counts for one phase.
@@ -34,9 +38,14 @@ typedef TallyEntry = ({
 
 class SessionTally {
   /// [clock] gives the time a question is checked; tests pass a fixed one.
-  SessionTally({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  SessionTally({DateTime Function()? clock, this.sync})
+    : _clock = clock ?? DateTime.now;
 
   final DateTime Function() _clock;
+
+  /// Sends each result to the Test Review sheet (B18). Null when the app
+  /// was run without `RESULTS_URL`, and in tests.
+  final ResultsSync? sync;
 
   /// A tally of one round only, for a game screen opened without a shared
   /// tally (tests, or a screen opened on its own). [results] holds one
@@ -59,13 +68,15 @@ class SessionTally {
 
   /// Records the result of a checked question.
   void record(Question question, bool right) {
-    _results[question.id] = (
+    final entry = (
       id: question.id,
       game: question.game,
       phase: question.phase,
       right: right,
       checkedAt: _clock(),
     );
+    _results[question.id] = entry;
+    sync?.add(entry);
   }
 
   /// Every question checked this session, in the order first checked, each
