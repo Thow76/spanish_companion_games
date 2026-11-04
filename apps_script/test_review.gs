@@ -8,6 +8,13 @@
 const FILE_ID = '1_ooFoNCuUjmMDNXWn8NFjl4GzMjxerPs'; // questions.json in the Spanish Companion folder
 const TAB = 'Questions';     // tab ChatGPT fills in
 const REVIEW_TAB = 'Sheet1'; // main Test Review tab
+const SHEET_ID = '1ukvaMOtiRTQHBrv17SGdqvTARnb_x7mlRaTad1YJDLw'; // the Test Review spreadsheet
+
+// Opened by ID, so the script works whether it was created from the sheet
+// (Extensions → Apps Script) or on its own at script.google.com.
+function book_() {
+  return SpreadsheetApp.openById(SHEET_ID);
+}
 
 // ---------- Menu and timer ----------
 
@@ -60,7 +67,7 @@ function reviewColumns_(sheet) {
 // ---------- Questions tab → questions.json ----------
 
 function exportQuestions(allowEmpty) {
-  const book = SpreadsheetApp.getActive();
+  const book = book_();
   const tz = book.getSpreadsheetTimeZone();
   const text = v => text_(v, tz);
   const list = s => s ? s.split('|').map(x => x.trim()).filter(Boolean) : [];
@@ -154,7 +161,7 @@ function json_(obj) {
 }
 
 function saveResults_(results) {
-  const book = SpreadsheetApp.getActive();
+  const book = book_();
   const tz = book.getSpreadsheetTimeZone();
   const text = v => text_(v, tz);
   const sheet = book.getSheetByName(REVIEW_TAB);
