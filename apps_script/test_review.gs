@@ -122,12 +122,18 @@ function exportQuestions(allowEmpty) {
 
   // An empty tab leaves the current file alone (so a tab ChatGPT has not
   // filled yet never wipes the app), unless results have just emptied it.
-  if (byId.size === 0 && allowEmpty !== true) return 0;
+  if (byId.size === 0 && allowEmpty !== true) {
+    console.log('The Questions tab is empty, so questions.json was left as it is.');
+    return 0;
+  }
 
   const json = JSON.stringify(Array.from(byId.values()), null, 2);
   const file = DriveApp.getFileById(FILE_ID);
   if (file.getBlob().getDataAsString('UTF-8') !== json) {
     file.setContent(json);
+    console.log('Wrote ' + byId.size + ' questions to questions.json.');
+  } else {
+    console.log('questions.json already has these ' + byId.size + ' questions.');
   }
   return byId.size;
 }
