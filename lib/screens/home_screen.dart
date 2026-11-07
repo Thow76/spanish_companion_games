@@ -12,6 +12,12 @@
 /// default, or `questions.json` on Google Drive when the app is run with the
 /// Drive key and file ID (B8, wired up in `main.dart`).
 ///
+/// The state of the loop (B20): with Drive, the source line also says when
+/// the file was last changed ("68 questions · Google Drive · updated 7 Nov,
+/// 04:50", from [HomeScreen.updatedSource]; left out if that request
+/// fails). When results are waiting to reach the Test Review sheet (B18),
+/// a line under the top bar says how many, with "Send again".
+///
 /// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
 /// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
 /// grid per group with 32 between the groups.
@@ -42,12 +48,17 @@ import 'spot_error_screen.dart';
 /// Signature of the function that fetches and parses the question file.
 typedef QuestionSource = Future<ParsedQuestions> Function();
 
+/// Signature of the function that says when the question file last
+/// changed (B20).
+typedef UpdatedSource = Future<DateTime> Function();
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.source = loadQuestionsFromAsset,
     this.sourceName = sampleSourceName,
     this.resultsSync,
+    this.updatedSource,
   });
 
   /// Where the questions come from. Defaults to the bundled sample file.
@@ -62,6 +73,12 @@ class HomeScreen extends StatefulWidget {
   /// Sends each checked question's result to the Test Review sheet (B18),
   /// when the app is run with `RESULTS_URL`; null otherwise.
   final ResultsSync? resultsSync;
+
+  /// When the question file was last changed (B20): Drive's `modifiedTime`
+  /// when loading from Drive; null otherwise (sample file, tests). Asked
+  /// again on every reload. A failure only leaves the time out of the
+  /// source line.
+  final UpdatedSource? updatedSource;
 
   static const String sampleSourceName = 'sample file';
 
@@ -79,16 +96,42 @@ class _HomeScreenState extends State<HomeScreen> {
   /// What to play (B12). Kept when the questions are reloaded.
   QuestionFilter _filter = QuestionFilter.all;
 
+  /// When the question file was last changed (B20), once known.
+  DateTime? _updatedAt;
+
+  /// Counts the requests for [_updatedAt], so an answer to an older
+  /// request (before a reload) is ignored.
+  int _updatedRequest = 0;
+
   @override
   void initState() {
     super.initState();
     _future = widget.source();
+    _loadUpdated();
   }
 
   void _reload() {
     setState(() {
       _future = widget.source();
+      _loadUpdated();
     });
+  }
+
+  /// Asks when the file was last changed; the questions never wait for it.
+  void _loadUpdated() {
+    final source = widget.updatedSource;
+    _updatedAt = null;
+    if (source == null) return;
+    final request = ++_updatedRequest;
+    Future<DateTime>.sync(source).then(
+      (time) {
+        if (mounted && request == _updatedRequest) {
+          setState(() => _updatedAt = time);
+        }
+      },
+      // Any failure: the source line just has no time.
+      onError: (Object _) {},
+    );
   }
 
   void _openGame(GameType game, List<Question> questions) {
@@ -140,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
             message: message,
             detail: detail,
             onReload: _reload,
+            resultsSync: widget.resultsSync,
           );
         }
         final parsed = snapshot.data!;
@@ -152,20 +196,53 @@ class _HomeScreenState extends State<HomeScreen> {
           shown: shown,
           filter: filter,
           onFilterChanged: (f) => setState(() => _filter = f),
-          sourceLine: _sourceLine(parsed.questions.length, widget.sourceName),
+          sourceLine: sourceLineText(
+            parsed.questions.length,
+            widget.sourceName,
+            updatedAt: _updatedAt,
+          ),
           onReload: _reload,
+          resultsSync: widget.resultsSync,
           onGameSelected: (game) =>
               _openGame(game, shown.where((q) => q.game == game).toList()),
         );
       },
     );
   }
+}
 
-  /// "9 questions · sample file", "1 question · sample file".
-  static String _sourceLine(int total, String sourceName) {
-    final count = total == 1 ? '1 question' : '$total questions';
-    return '$count · $sourceName';
-  }
+/// The top bar's source line: "9 questions · sample file",
+/// "1 question · sample file", or with [updatedAt] (B20)
+/// "68 questions · Google Drive · updated 7 Nov, 04:50" (local time).
+String sourceLineText(int total, String sourceName, {DateTime? updatedAt}) {
+  final count = total == 1 ? '1 question' : '$total questions';
+  final updated = updatedAt == null
+      ? ''
+      : ' · updated ${updatedTimeText(updatedAt.toLocal())}';
+  return '$count · $sourceName$updated';
+}
+
+const List<String> _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// "7 Nov, 04:50": day, short month, 24-hour time, for [time] as given
+/// (the caller converts to local time).
+String updatedTimeText(DateTime time) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${time.day} ${_months[time.month - 1]}, '
+      '${two(time.hour)}:${two(time.minute)}';
 }
 
 /// The error view's text for a failed load (B9): a plain message, and an
@@ -199,6 +276,7 @@ class _LoadedView extends StatelessWidget {
     required this.sourceLine,
     required this.onReload,
     required this.onGameSelected,
+    this.resultsSync,
   });
 
   final ParsedQuestions parsed;
@@ -210,6 +288,7 @@ class _LoadedView extends StatelessWidget {
   final String sourceLine;
   final VoidCallback onReload;
   final ValueChanged<GameType> onGameSelected;
+  final ResultsSync? resultsSync;
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +314,8 @@ class _LoadedView extends StatelessWidget {
       topBar: HomeTopBar(source: sourceLine, onReload: onReload),
       footer: HomeFrame.footerLine(context),
       children: [
+        // Results waiting to reach the Test Review sheet (B20).
+        if (resultsSync != null) UnsavedResultsLine(sync: resultsSync!),
         if (parsed.hasProblems) ...[
           SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
           _ProblemsNotice(problems: parsed.problems),
@@ -549,6 +630,7 @@ class _ErrorView extends StatelessWidget {
     required this.message,
     required this.onReload,
     this.detail,
+    this.resultsSync,
   });
 
   final String message;
@@ -556,6 +638,7 @@ class _ErrorView extends StatelessWidget {
   /// Smaller line under the message (Drive's own words), if any.
   final String? detail;
   final VoidCallback onReload;
+  final ResultsSync? resultsSync;
 
   static const String sourceLine = 'No questions loaded';
 
@@ -565,6 +648,7 @@ class _ErrorView extends StatelessWidget {
     return HomeFrame(
       topBar: HomeTopBar(source: sourceLine, onReload: onReload),
       children: [
+        if (resultsSync != null) UnsavedResultsLine(sync: resultsSync!),
         const SizedBox(height: AppSpacing.s48),
         const Icon(
           Icons.error_outline_rounded,
@@ -582,6 +666,62 @@ class _ErrorView extends StatelessWidget {
           child: PrimaryButton(label: 'Reload questions', onPressed: onReload),
         ),
       ],
+    );
+  }
+}
+
+/// Under the top bar (B20): "2 results not saved yet" and a "Send again"
+/// button while results wait to reach the Test Review sheet (B18), using
+/// [ResultsSync.send]; "Saving 2 results…" while a send is on its way.
+/// Nothing at all when every result is saved. Muted caption, as the spec
+/// has no copy for it.
+class UnsavedResultsLine extends StatelessWidget {
+  const UnsavedResultsLine({super.key, required this.sync});
+
+  final ResultsSync sync;
+
+  static const String retryLabel = 'Send again';
+
+  /// "1 result not saved yet", "2 results not saved yet".
+  static String unsavedText(int count) =>
+      '$count ${count == 1 ? 'result' : 'results'} not saved yet';
+
+  /// "Saving 2 results…".
+  static String savingText(int count) =>
+      'Saving $count ${count == 1 ? 'result' : 'results'}…';
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        final count = sync.pending;
+        if (count == 0) return const SizedBox.shrink();
+        final type = AppTypography.of(context);
+        final sending = sync.state == ResultsSyncState.sending;
+        return Padding(
+          key: const ValueKey('home-unsaved-results'),
+          padding: const EdgeInsets.only(top: AppSpacing.s12),
+          child: Semantics(
+            liveRegion: true,
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.s8,
+              children: [
+                Text(
+                  sending ? savingText(count) : '${unsavedText(count)} ·',
+                  style: type.caption,
+                ),
+                if (!sending)
+                  TextButton(
+                    onPressed: sync.send,
+                    child: const Text(retryLabel),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
