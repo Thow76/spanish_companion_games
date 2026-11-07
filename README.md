@@ -42,3 +42,18 @@ question is sent to it and the script fills in Test Review. For local runs,
 add `"RESULTS_URL": "…"` to `drive.json` and run
 `flutter run -d chrome --web-port 5000 --dart-define-from-file=drive.json`.
 Without it, "Copy results" is the only way to record results.
+
+## Apps Script (Test Review sheet)
+
+`apps_script/test_review.gs` lives in the Test Review sheet (Extensions →
+Apps Script). It turns the Questions tab into `questions.json` on Drive and
+saves the results the app sends.
+
+`questions.json` is written as soon as the Questions tab changes, with an
+hourly run as a fallback and "Spanish Games → Update questions.json now" in
+the sheet's menu. To switch this on, paste the script in, save, choose
+`setUpTriggers` in the function list and press Run once (approve the
+permissions if asked). It replaces the old `setUpHourly` triggers. Changes to
+other tabs or to formatting do not export; the script waits a few seconds
+after a change so a burst of edits gives one export. Each run is listed under
+Executions in the Apps Script editor.
