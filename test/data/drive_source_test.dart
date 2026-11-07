@@ -279,4 +279,75 @@ void main() {
     };
     expect(messages, hasLength(DriveProblem.values.length));
   });
+
+  group('modified time (B20)', () {
+    test('asks Drive for modifiedTime only, with the key', () {
+      final uri = _config.metadataUri;
+      expect(uri.host, 'www.googleapis.com');
+      expect(uri.path, '/drive/v3/files/test-file');
+      expect(uri.queryParameters, {
+        'fields': 'modifiedTime',
+        'key': 'test-key',
+      });
+    });
+
+    test('reads modifiedTime as UTC', () async {
+      late Uri asked;
+      final client = MockClient((request) async {
+        asked = request.url;
+        return http.Response(
+          '{"modifiedTime": "2026-11-05T22:29:13.512Z"}',
+          200,
+        );
+      });
+      final time = await loadDriveModifiedTime(_config, client: client);
+      expect(asked, _config.metadataUri);
+      expect(time, DateTime.utc(2026, 11, 5, 22, 29, 13, 512));
+      expect(time.isUtc, isTrue);
+    });
+
+    test('an error answer is classified as for the file', () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          '{"error": {"code": 404, "message": "File not found: x."}}',
+          404,
+        ),
+      );
+      await expectLater(
+        loadDriveModifiedTime(_config, client: client),
+        throwsA(
+          isA<DriveLoadException>().having(
+            (e) => e.problem,
+            'problem',
+            DriveProblem.notFound,
+          ),
+        ),
+      );
+    });
+
+    test('no answer is noConnection', () async {
+      final client = MockClient((_) async => throw http.ClientException('x'));
+      await expectLater(
+        loadDriveModifiedTime(_config, client: client),
+        throwsA(
+          isA<DriveLoadException>().having(
+            (e) => e.problem,
+            'problem',
+            DriveProblem.noConnection,
+          ),
+        ),
+      );
+    });
+
+    test('an answer without modifiedTime is an error', () async {
+      for (final body in ['{}', 'not json', '{"modifiedTime": "soon"}']) {
+        final client = MockClient((_) async => http.Response(body, 200));
+        await expectLater(
+          loadDriveModifiedTime(_config, client: client),
+          throwsA(isA<DriveLoadException>()),
+          reason: body,
+        );
+      }
+    });
+  });
 }

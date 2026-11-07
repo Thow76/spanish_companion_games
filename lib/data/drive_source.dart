@@ -42,6 +42,15 @@ class DriveConfig {
     '/drive/v3/files/$fileId',
     {'alt': 'media', 'key': apiKey},
   );
+
+  /// `https://www.googleapis.com/drive/v3/files/<id>?fields=modifiedTime&key=<key>`
+  /// (B20): when the file was last changed, for the home screen's source
+  /// line.
+  Uri get metadataUri => Uri.https(
+    'www.googleapis.com',
+    '/drive/v3/files/$fileId',
+    {'fields': 'modifiedTime', 'key': apiKey},
+  );
 }
 
 /// Shown in the home screen's source line when the questions come from Drive
@@ -309,6 +318,48 @@ Future<ParsedQuestions> loadQuestionsFromDrive(
         detail: _shorten(e.message),
       );
     }
+  } finally {
+    if (client == null) c.close();
+  }
+}
+
+/// When the question file on Drive was last changed (B20), from its
+/// `modifiedTime`, in UTC.
+///
+/// A second, small request with the same key. Failures are reported the
+/// same way as for the file itself ([DriveLoadException], classified by
+/// [classifyDriveError]); an answer without a readable `modifiedTime` is
+/// [DriveProblem.other]. The home screen treats any failure as "no time
+/// known" and still shows the questions.
+/// [client] is for tests; by default a new client is made and closed.
+Future<DateTime> loadDriveModifiedTime(
+  DriveConfig config, {
+  http.Client? client,
+}) async {
+  final c = client ?? http.Client();
+  try {
+    final http.Response response;
+    try {
+      response = await c.get(config.metadataUri);
+    } catch (e) {
+      throw DriveLoadException(DriveProblem.noConnection, cause: e);
+    }
+    final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+    if (response.statusCode != 200) {
+      throw classifyDriveError(response.statusCode, body);
+    }
+    try {
+      final decoded = jsonDecode(body);
+      final value = decoded is Map ? decoded['modifiedTime'] : null;
+      if (value is String) return DateTime.parse(value).toUtc();
+    } on FormatException {
+      // Falls through to the error below.
+    }
+    throw const DriveLoadException(
+      DriveProblem.other,
+      statusCode: 200,
+      detail: 'Drive did not say when the file was changed.',
+    );
   } finally {
     if (client == null) c.close();
   }
