@@ -40,6 +40,8 @@ class SpanishGamesApp extends StatelessWidget {
               source: () => loadQuestionsFromDrive(_drive),
               sourceName: driveSourceName,
               resultsSync: _sync,
+              // B20: "· updated 7 Nov, 04:50" in the source line.
+              updatedSource: () => loadDriveModifiedTime(_drive),
             )
           : HomeScreen(resultsSync: _sync),
     );
