@@ -1,6 +1,7 @@
 // Spanish Games: links the Test Review sheet and the app.
-//  - Every hour (and from the Spanish Games menu): the "Questions" tab
-//    becomes questions.json on Drive, which the app reads.
+//  - As soon as the "Questions" tab changes (and every hour as a fallback,
+//    and from the Spanish Games menu): the tab becomes questions.json on
+//    Drive, which the app reads. Run setUpTriggers() once to switch this on.
 //  - Results: the app sends each answer here (deployed as a web app) and
 //    the script fills in Test Review.
 // Lives in the Test Review sheet (Extensions → Apps Script).
@@ -24,12 +25,43 @@ function onOpen() {
     .addToUi();
 }
 
-// Run once by hand: updates the file every hour from then on.
-function setUpHourly() {
+// Run once by hand (replaces the old setUpHourly): exports questions.json
+// whenever the spreadsheet changes, plus every hour as a fallback.
+function setUpTriggers() {
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'exportQuestions')
+    .filter(t => ['exportQuestions', 'questionsChanged']
+      .indexOf(t.getHandlerFunction()) >= 0)
     .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('questionsChanged').forSpreadsheet(SHEET_ID).onChange().create();
   ScriptApp.newTrigger('exportQuestions').timeBased().everyHours(1).create();
+  console.log('Triggers set: on change, and hourly.');
+}
+
+const SETTLE_MS = 5000; // let a burst of edits finish before reading the tab
+
+// Runs on any change to the spreadsheet. The change event does not say which
+// tab changed, so this compares the Questions tab with what was last
+// exported and only exports when it differs. Under the script lock, so a
+// burst of ChatGPT edits queues up and the later runs find nothing new.
+function questionsChanged(e) {
+  if (e && e.changeType === 'FORMAT') return;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(60000)) {
+    console.log('Busy; the next change or the hourly run will export.');
+    return;
+  }
+  try {
+    Utilities.sleep(SETTLE_MS);
+    const sheet = book_().getSheetByName(TAB);
+    if (!sheet) return;
+    if (fingerprint_(sheet.getDataRange().getValues()) === lastFingerprint_()) {
+      console.log('The Questions tab has not changed since the last export.');
+      return;
+    }
+    exportQuestions();
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------- Helpers ----------
@@ -64,6 +96,22 @@ function reviewColumns_(sheet) {
   return cols;
 }
 
+// What the Questions tab held at the last export, to skip unchanged tabs.
+function fingerprint_(values) {
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,
+    JSON.stringify(values), Utilities.Charset.UTF_8);
+  return Utilities.base64Encode(digest);
+}
+
+function lastFingerprint_() {
+  return PropertiesService.getScriptProperties().getProperty('questionsFingerprint');
+}
+
+function rememberFingerprint_(values) {
+  PropertiesService.getScriptProperties()
+    .setProperty('questionsFingerprint', fingerprint_(values));
+}
+
 // ---------- Questions tab → questions.json ----------
 
 function exportQuestions(allowEmpty) {
@@ -87,6 +135,7 @@ function exportQuestions(allowEmpty) {
   const sheet = book.getSheetByName(TAB);
   if (!sheet) throw new Error('No tab called "' + TAB + '"');
   const rows = sheet.getDataRange().getValues();
+  const tabValues = rows.slice();
   const head = rows.shift().map(x => text(x).toLowerCase());
 
   const byId = new Map(); // the newest row for an id wins
@@ -124,6 +173,7 @@ function exportQuestions(allowEmpty) {
   // filled yet never wipes the app), unless results have just emptied it.
   if (byId.size === 0 && allowEmpty !== true) {
     console.log('The Questions tab is empty, so questions.json was left as it is.');
+    rememberFingerprint_(tabValues);
     return 0;
   }
 
@@ -135,6 +185,7 @@ function exportQuestions(allowEmpty) {
   } else {
     console.log('questions.json already has these ' + byId.size + ' questions.');
   }
+  rememberFingerprint_(tabValues);
   return byId.size;
 }
 
