@@ -57,3 +57,11 @@ permissions if asked). It replaces the old `setUpHourly` triggers. Changes to
 other tabs or to formatting do not export; the script waits a few seconds
 after a change so a burst of edits gives one export. Each run is listed under
 Executions in the Apps Script editor.
+
+The Questions tab may have two optional columns headed `focus` and `hint`
+(found by header name, like the others, in any position). `focus` is a short
+line naming the language point, shown above a Repair question; `hint` is
+shown after a wrong first try. Both must never give the answer. They are
+copied into `questions.json` only when filled in; without them the app falls
+back to the question's category. After changing the script, paste it into the
+sheet again and save; no trigger set-up is needed.

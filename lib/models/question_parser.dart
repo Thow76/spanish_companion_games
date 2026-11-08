@@ -227,6 +227,8 @@ Question questionFromJson(Object? raw) {
     explanation: _optionalString(raw['explanation']) ?? '',
     rule: _optionalText(raw['rule']),
     meaning: _optionalText(raw['meaning']),
+    focus: _optionalText(raw['focus']),
+    hint: _optionalText(raw['hint']),
     source: _optionalString(raw['source']) ?? '',
     added: _optionalString(raw['added']) ?? '',
   );

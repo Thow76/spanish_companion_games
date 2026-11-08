@@ -197,6 +197,39 @@ void main() {
       expect(questionFromJson(fillGap(overrides: {'rule': ' '})).rule, isNull);
     });
 
+    test('reads optional focus and hint', () {
+      final q = questionFromJson(
+        repair(
+          overrides: {
+            'focus': 'Verb agreement with *la gente*',
+            'hint': 'Is la gente one thing or many?',
+          },
+        ),
+      );
+      expect(q.focus, 'Verb agreement with *la gente*');
+      expect(q.hint, 'Is la gente one thing or many?');
+
+      final without = questionFromJson(repair());
+      expect(without.focus, isNull);
+      expect(without.hint, isNull);
+
+      // Blank or not a string: treated as absent, never a problem.
+      final odd = questionFromJson(
+        repair(overrides: {'focus': '  ', 'hint': 42}),
+      );
+      expect(odd.focus, isNull);
+      expect(odd.hint, isNull);
+    });
+
+    test('focus and hint round-trip through toJson', () {
+      final raw = repair(
+        overrides: {'focus': 'Verb agreement', 'hint': 'One or many?'},
+      );
+      expect(questionFromJson(raw).toJson(), raw);
+      expect(questionFromJson(repair()).toJson().containsKey('focus'), isFalse);
+      expect(questionFromJson(repair()).toJson().containsKey('hint'), isFalse);
+    });
+
     test('parses a match question into pairs', () {
       final q = questionFromJson({
         'id': 'm1',
@@ -577,6 +610,17 @@ void main() {
         spot.any((q) => !spotErrorSentenceIsCorrect(q)),
         isTrue,
         reason: 'sample should include a spot_error sentence that needs fixing',
+      );
+      final repairs = result.forGame(GameType.repair);
+      expect(
+        repairs.any((q) => q.focus != null && q.hint != null),
+        isTrue,
+        reason: 'sample should include a repair with a focus and a hint',
+      );
+      expect(
+        repairs.any((q) => q.focus == null && q.hint == null),
+        isTrue,
+        reason: 'sample should include a repair without them (fallback)',
       );
       expect(
         result.questions.any((q) => q.type == QuestionType.note),
