@@ -61,6 +61,8 @@
     "prompt": "El problema es muy difícil y **la gente están** cansada.",
     "answers": ["El problema es muy difícil y la gente está cansada."],
     "explanation": "la gente + singular verb = people (la gente is singular in Spanish)",
+    "focus": "Verb agreement with la gente",
+    "hint": "Is la gente one thing or many in Spanish?",
     "source": "Work and plans, 2026-10-14",
     "added": "2026-10-17"
   },
@@ -73,6 +75,8 @@
     "prompt": "**Me gusta** los libros y **me gusta** las películas.",
     "answers": ["Me gustan los libros y me gustan las películas."],
     "explanation": "me gustan + plural noun = gustar agrees with the thing liked",
+    "focus": "Verb form with gustar",
+    "hint": "Gustar agrees with the thing that is liked, not with the person.",
     "source": "Free time, 2026-10-15",
     "added": "2026-10-17"
   },

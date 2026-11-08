@@ -190,6 +190,8 @@ class Question {
     this.explanation = '',
     this.rule,
     this.meaning,
+    this.focus,
+    this.hint,
     this.source = '',
     this.added = '',
     List<PromptRun>? promptRuns,
@@ -274,6 +276,17 @@ class Question {
   /// thinking of doing something".
   final String? meaning;
 
+  /// Optional, mainly for `repair`: a short line shown above the question
+  /// naming the language point without giving the answer, e.g. "Verb form
+  /// after *espero que*". `null` when absent or blank; screens fall back to
+  /// [category].
+  final String? focus;
+
+  /// Optional, mainly for `repair`: shown after a wrong first try, before
+  /// the second try. Nudges towards the rule without giving the answer, e.g.
+  /// "Think about the subjunctive". `null` when absent or blank.
+  final String? hint;
+
   /// Where the mistake came from: conversation topic and date.
   final String source;
 
@@ -333,6 +346,8 @@ class Question {
       'explanation': explanation,
       if (rule != null) 'rule': rule,
       if (meaning != null) 'meaning': meaning,
+      if (focus != null) 'focus': focus,
+      if (hint != null) 'hint': hint,
       'source': source,
       'added': added,
     };

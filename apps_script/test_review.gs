@@ -162,6 +162,11 @@ function exportQuestions(allowEmpty) {
     if (options.length) q.options = options;
     if (/^(true|yes)$/i.test(get('missing_word'))) q.missing_word = true;
     q.explanation = get('explanation');
+    // Optional hints for Repair (and Choose a correction), left out when empty.
+    const focus = get('focus');
+    if (focus) q.focus = focus;
+    const hint = get('hint');
+    if (hint) q.hint = hint;
     q.source = get('source');
     q.added = get('added');
 
