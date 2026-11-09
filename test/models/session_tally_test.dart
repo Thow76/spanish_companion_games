@@ -95,6 +95,21 @@ void main() {
       expect(t.entries.map((e) => e.id), ['FB-0001', 'FB-0002']);
     });
 
+    test('right with a hint is copied as such and counts as not passed '
+        '(B22)', () {
+      final t = SessionTally(clock: () => DateTime(2026, 11, 9))
+        ..record(_q('FB-0005', GameType.repair), false, hinted: true);
+      expect(
+        t.resultsText().split('\n').last,
+        'FB-0005, repair, right with hint, 2026-11-09',
+      );
+      expect(t.scoreFor(QuestionPhase.noticeAndCorrect), (
+        right: 0,
+        answered: 1,
+      ));
+      expect(t.entries.single.hinted, isTrue);
+    });
+
     test('an empty tally copies only the header', () {
       final t = SessionTally(clock: () => DateTime(2026, 1, 5));
       expect(t.resultsText(), 'Spanish Games results 2026-01-05');

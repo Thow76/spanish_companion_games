@@ -111,6 +111,30 @@ void main() {
     ]);
   });
 
+  test(
+    'right with a hint is sent as right: false, hinted: true (B22)',
+    () async {
+      final script = _FakeScript();
+      final sync = ResultsSync(_config, client: script.client);
+      SessionTally(
+        clock: () => day,
+        sync: sync,
+      ).record(_q('FB-0005', GameType.repair), false, hinted: true);
+      await _settle();
+      await _settle();
+      expect(script.bodies.single['results'], [
+        {
+          'id': 'FB-0005',
+          'game': 'repair',
+          'phase': 1,
+          'right': false,
+          'hinted': true,
+          'date': '2026-11-04',
+        },
+      ]);
+    },
+  );
+
   test('an id with no row in the sheet is not sent again', () async {
     final script = _FakeScript()..unknown = {'2026-10-17-001'};
     final sync = ResultsSync(_config, client: script.client);

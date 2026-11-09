@@ -29,6 +29,10 @@
 /// ]}
 /// ```
 ///
+/// B22: a Repair question right only after the hint is sent as
+/// `"right": false, "hinted": true` (the field is left out otherwise). The
+/// script ignores `hinted` for now, so the item counts as not passed.
+///
 /// The script answers `{"ok": true, "saved": ["FB-0001"], "unknown": []}`.
 /// `unknown` lists ids with no row in the sheet (e.g. the sample file's
 /// ids); they are not sent again.
@@ -168,6 +172,7 @@ class ResultsSync extends ChangeNotifier {
           'game': e.game.jsonValue,
           'phase': e.phase.number,
           'right': e.right,
+          if (e.hinted) 'hinted': true,
           'date': SessionTally.dateText(e.checkedAt),
         },
     ],

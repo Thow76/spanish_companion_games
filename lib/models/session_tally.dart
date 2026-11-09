@@ -19,6 +19,10 @@
 ///
 /// B18: when the app is run with `RESULTS_URL`, the tally also hands each
 /// result to its [sync], which sends it straight to the Test Review sheet.
+///
+/// B22: a Repair question right only on the second try, after the hint, is
+/// recorded as not passed (`right: false`) with `hinted: true`, so the item
+/// comes back; Copy results writes it as "right with hint".
 library;
 
 import '../data/results_sync.dart';
@@ -33,6 +37,7 @@ typedef TallyEntry = ({
   GameType game,
   QuestionPhase phase,
   bool right,
+  bool hinted,
   DateTime checkedAt,
 });
 
@@ -66,13 +71,15 @@ class SessionTally {
   /// was first checked, even when a later result replaces an earlier one.
   final Map<String, TallyEntry> _results = {};
 
-  /// Records the result of a checked question.
-  void record(Question question, bool right) {
+  /// Records the result of a checked question. [hinted]: right only after
+  /// the hint (B22); pass `right: false` with it, as it counts as not passed.
+  void record(Question question, bool right, {bool hinted = false}) {
     final entry = (
       id: question.id,
       game: question.game,
       phase: question.phase,
-      right: right,
+      right: right && !hinted,
+      hinted: hinted,
       checkedAt: _clock(),
     );
     _results[question.id] = entry;
@@ -119,19 +126,25 @@ class SessionTally {
   /// ```
   ///
   /// Fields are the question's `id`, its `game` value as in
-  /// `questions.json`, "right" or "wrong", and the day it was checked
+  /// `questions.json`, "right", "wrong" or "right with hint" (B22: right on
+  /// the second try, after the hint, which counts as not passed), and the
+  /// day it was checked
   /// (local time, YYYY-MM-DD). [now] is the day in the header (default: the
   /// tally's clock).
   String resultsText({DateTime? now}) {
     final lines = <String>[resultsHeader(now ?? _clock())];
     for (final e in _results.values) {
       lines.add(
-        '${e.id}, ${e.game.jsonValue}, ${e.right ? 'right' : 'wrong'}, '
+        '${e.id}, ${e.game.jsonValue}, ${resultWord(e)}, '
         '${dateText(e.checkedAt)}',
       );
     }
     return lines.join('\n');
   }
+
+  /// "right", "wrong" or "right with hint" for the copied results.
+  static String resultWord(TallyEntry e) =>
+      e.hinted ? 'right with hint' : (e.right ? 'right' : 'wrong');
 
   /// YYYY-MM-DD in local time.
   static String dateText(DateTime t) {
