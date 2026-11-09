@@ -11,6 +11,16 @@
 ///
 /// Checking uses [checkRepair] from `lib/models/answer_check.dart`. The
 /// session ends with the summary ([SessionSummaryView], B7).
+///
+/// B22 (Flow v2, stage 1): a focus line above the field names the language
+/// point (the question's `focus`, else its category), never the answer. A
+/// wrong first Check does not end the question: it shows the "Not quite"
+/// toast and a hint under the field (the question's `hint`, else "Look
+/// again at the marked words: `category`"), keeps the field editable and
+/// allows a second try, which must differ from the first. A wrong second
+/// try ends the question as before (corrected version, explanation, "You
+/// wrote"). Right on the second try shows "Right with a hint" and is
+/// recorded as not passed (`hinted`), so the item comes back.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,7 +28,9 @@ import 'package:flutter/material.dart';
 import '../models/answer_check.dart';
 import '../models/question.dart';
 import '../models/session_tally.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_layout.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
@@ -29,11 +41,7 @@ import 'session_summary_view.dart';
 /// Questions from other games, and repair questions with nothing marked,
 /// are skipped (the parser already rejects the latter).
 class RepairScreen extends StatefulWidget {
-  const RepairScreen({
-    super.key,
-    required this.questions,
-    this.session,
-  });
+  const RepairScreen({super.key, required this.questions, this.session});
 
   final List<Question> questions;
 
@@ -44,6 +52,48 @@ class RepairScreen extends StatefulWidget {
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction = 'Correct the marked words';
+
+  /// Shown after a right second try, under the field (B22).
+  static const String rightWithHintText = SessionSummaryView.rightWithHintText;
+
+  /// The line under it.
+  static const String rightWithHintCaption =
+      'It counts as not passed yet, so it will come back.';
+
+  /// The focus line above the field: the question's `focus`, else its
+  /// category (B22).
+  static String focusText(Question q) {
+    final focus = q.focus?.trim();
+    return focus == null || focus.isEmpty ? q.category : focus;
+  }
+
+  /// The hint after a wrong first try: the question's `hint`, else a
+  /// pointer back to the marked words with the category (B22).
+  static String hintText(Question q) {
+    final hint = q.hint?.trim();
+    return hint == null || hint.isEmpty
+        ? 'Look again at the marked words: ${q.category}'
+        : hint;
+  }
+
+  /// [text] split into plain and emphasised runs: words between single
+  /// asterisks (`*espero que*`, as the plan's examples write them) are
+  /// emphasised and the asterisks are not shown. A stray asterisk is shown
+  /// as written.
+  static List<({String text, bool emphasis})> emphasisRuns(String text) {
+    final s = text.replaceAll('**', '*');
+    final runs = <({String text, bool emphasis})>[];
+    var i = 0;
+    for (final m in RegExp(r'\*([^*]+)\*').allMatches(s)) {
+      if (m.start > i) {
+        runs.add((text: s.substring(i, m.start), emphasis: false));
+      }
+      runs.add((text: m.group(1)!, emphasis: true));
+      i = m.end;
+    }
+    if (i < s.length) runs.add((text: s.substring(i), emphasis: false));
+    return runs;
+  }
 
   /// The learner's sentence for the "You wrote" line. If [typed] is no
   /// longer than the marked stretch (the learner typed only the part), it
@@ -86,8 +136,22 @@ class _RepairScreenState extends State<RepairScreen> {
   /// What the learner had typed when they checked.
   String _typed = '';
 
-  /// One entry per question: null until checked, then right or wrong.
+  /// Whether the current question's first try was wrong, so the hint is
+  /// showing and this is the second try (B22).
+  bool _hintShown = false;
+
+  /// The first, wrong try; the second must differ from it.
+  String _firstTry = '';
+
+  /// Whether the current question was right on the second try.
+  bool _hinted = false;
+
+  /// One entry per question: null until checked, then passed or not. A
+  /// question right with a hint counts as not passed (false).
   late List<bool?> _results;
+
+  /// One entry per question: right on the second try, after the hint.
+  late List<bool> _hintedResults;
 
   /// Whether the last question has been checked and "See results" pressed.
   bool _finished = false;
@@ -98,9 +162,11 @@ class _RepairScreenState extends State<RepairScreen> {
 
   /// "Next question" gets keyboard focus after checking (spec section 10).
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
-  final FocusNode _topBarActionFocus = FocusNode(
-    debugLabel: 'Top bar action',
-  );
+  final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
+
+  /// The field, focused again after a wrong first try (not on phones,
+  /// where it would bring the keyboard up over the hint).
+  final FocusNode _fieldFocus = FocusNode(debugLabel: 'Repair field');
 
   @override
   void initState() {
@@ -109,6 +175,7 @@ class _RepairScreenState extends State<RepairScreen> {
         .where((q) => q.game == GameType.repair && q.hasMarks)
         .toList();
     _results = List<bool?>.filled(_questions.length, null);
+    _hintedResults = List<bool>.filled(_questions.length, false);
     _controller = TextEditingController(
       text: _questions.isEmpty ? '' : _questions.first.promptText,
     );
@@ -119,6 +186,7 @@ class _RepairScreenState extends State<RepairScreen> {
     _controller.dispose();
     _nextButtonFocus.dispose();
     _topBarActionFocus.dispose();
+    _fieldFocus.dispose();
     super.dispose();
   }
 
@@ -127,11 +195,13 @@ class _RepairScreenState extends State<RepairScreen> {
   bool get _isLast => _index == _total - 1;
 
   /// Check is enabled once the field differs from the prefilled sentence
-  /// (spec section 6).
+  /// (spec section 6) and, on the second try, from the first try (B22).
   bool get _canCheck =>
       !_checked &&
       AnswerField.isChanged(_controller.text, _question.promptText) &&
-      normaliseAnswer(_controller.text).isNotEmpty;
+      normaliseAnswer(_controller.text).isNotEmpty &&
+      !(_hintShown &&
+          normaliseAnswer(_controller.text) == normaliseAnswer(_firstTry));
 
   void _resetField() {
     _controller.dispose();
@@ -147,16 +217,34 @@ class _RepairScreenState extends State<RepairScreen> {
     if (!_canCheck) return;
     final typed = _controller.text;
     final correct = checkRepair(_question, typed);
+    final f = FormFactor.of(context);
+
+    // A wrong first try: the hint and a second try (B22). Nothing is
+    // recorded yet.
+    if (!correct && !_hintShown) {
+      setState(() {
+        _hintShown = true;
+        _firstTry = typed;
+        _toastResult = false;
+        _toastId++;
+      });
+      if (f != FormFactor.phone) _fieldFocus.requestFocus();
+      return;
+    }
+
+    final hinted = correct && _hintShown;
+    final passed = correct && !_hintShown;
     setState(() {
       _checked = true;
       _correct = correct;
+      _hinted = hinted;
       _typed = typed;
-      _results[_index] = correct;
-      widget.session?.record(_question, correct);
+      _results[_index] = passed;
+      _hintedResults[_index] = hinted;
+      widget.session?.record(_question, passed, hinted: hinted);
       _toastResult = correct;
       _toastId++;
     });
-    final f = FormFactor.of(context);
     if (f == FormFactor.phoneLandscape) {
       _topBarActionFocus.requestFocus();
     } else if (f == FormFactor.laptop) {
@@ -181,6 +269,7 @@ class _RepairScreenState extends State<RepairScreen> {
         _checked = false;
         _correct = false;
         _typed = '';
+        _clearHint();
         _resetField();
       }
       _toastResult = null;
@@ -193,11 +282,19 @@ class _RepairScreenState extends State<RepairScreen> {
       _checked = false;
       _correct = false;
       _typed = '';
+      _clearHint();
       _results = List<bool?>.filled(_questions.length, null);
+      _hintedResults = List<bool>.filled(_questions.length, false);
       _finished = false;
       _toastResult = null;
       _resetField();
     });
+  }
+
+  void _clearHint() {
+    _hintShown = false;
+    _firstTry = '';
+    _hinted = false;
   }
 
   void _goHome() => Navigator.of(context).maybePop();
@@ -221,6 +318,7 @@ class _RepairScreenState extends State<RepairScreen> {
         game: GameType.repair,
         questions: _questions,
         results: _results,
+        hinted: _hintedResults,
         session: widget.session,
         onPlayAgain: _playAgain,
         onBack: _goHome,
@@ -268,6 +366,11 @@ class _RepairScreenState extends State<RepairScreen> {
         missingWord: q.missingWord,
         corrected: _checked ? corrected : null,
       ),
+      _EmphasisText(
+        RepairScreen.focusText(q),
+        style: type.caption,
+        semanticsPrefix: 'Focus: ',
+      ),
       AnswerField(
         // A new key per question, so the field's own state starts afresh.
         key: ValueKey('repair-field-${q.id}'),
@@ -278,8 +381,24 @@ class _RepairScreenState extends State<RepairScreen> {
         caption: AnswerField.repairCaption,
         onChanged: _onChanged,
         onSubmitted: (_) => _check(),
+        focusNode: _fieldFocus,
         semanticLabel: 'Your corrected sentence',
       ),
+      if (_hintShown && !_checked)
+        _HintLine(text: RepairScreen.hintText(q))
+      else if (_checked && _hinted)
+        Semantics(
+          liveRegion: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(RepairScreen.rightWithHintText, style: type.body),
+              const SizedBox(height: AppSpacing.s4),
+              Text(RepairScreen.rightWithHintCaption, style: type.caption),
+            ],
+          ),
+        ),
     ];
 
     final String actionLabel;
@@ -324,6 +443,78 @@ class _RepairScreenState extends State<RepairScreen> {
       toastId: _toastId,
       onToastHidden: _onToastHidden,
       children: rows,
+    );
+  }
+}
+
+/// A line of text with `*…*` runs in italics ([RepairScreen.emphasisRuns]);
+/// read by screen readers as one phrase, with [semanticsPrefix] in front.
+class _EmphasisText extends StatelessWidget {
+  const _EmphasisText(this.text, {required this.style, this.semanticsPrefix});
+
+  final String text;
+  final TextStyle style;
+  final String? semanticsPrefix;
+
+  @override
+  Widget build(BuildContext context) {
+    final runs = RepairScreen.emphasisRuns(text);
+    final plain = runs.map((r) => r.text).join();
+    return Semantics(
+      label: '${semanticsPrefix ?? ''}$plain',
+      child: ExcludeSemantics(
+        child: Text.rich(
+          TextSpan(
+            style: style,
+            children: [
+              for (final r in runs)
+                TextSpan(
+                  text: r.text,
+                  style: r.emphasis
+                      ? const TextStyle(fontStyle: FontStyle.italic)
+                      : null,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The hint after a wrong first try (B22): a small lightbulb and the hint
+/// in body text, announced to screen readers. A stand-in until U18.
+class _HintLine extends StatelessWidget {
+  const _HintLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.s4),
+            child: const Icon(
+              Icons.lightbulb_outline_rounded,
+              size: AppSizes.iconSmall,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s8),
+          Expanded(
+            child: _EmphasisText(
+              text,
+              style: type.body,
+              semanticsPrefix: 'Hint: ',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -33,6 +33,10 @@
 /// B18: when the app sends results straight to the Test Review sheet, a
 /// status line under "Copy results" says whether they are saved, with
 /// "Send again" if a send failed.
+///
+/// B22: a Repair question right only after the hint counts as not passed,
+/// so it is listed under "To look at again", with "Right with a hint" under
+/// its chip row.
 library;
 
 import 'package:flutter/material.dart';
@@ -57,6 +61,7 @@ class SessionSummaryView extends StatelessWidget {
     required this.onPlayAgain,
     required this.onBack,
     this.session,
+    this.hinted,
   });
 
   final GameType game;
@@ -75,6 +80,10 @@ class SessionSummaryView extends StatelessWidget {
   /// counts this round only.
   final SessionTally? session;
 
+  /// One entry per question in [questions]: right only after the hint
+  /// (B22). Null for games without hints.
+  final List<bool>? hinted;
+
   static const String title = 'Session complete';
   static const String sessionHeading = 'All games so far';
   static const String wrongHeading = 'To look at again';
@@ -82,16 +91,23 @@ class SessionSummaryView extends StatelessWidget {
       'The questions you got wrong this round, with the answer.';
   static const String allRightText = 'You got every question right.';
   static const String alreadyCorrectText = 'This sentence was already correct.';
+  static const String rightWithHintText = 'Right with a hint';
 
   static String scoreText(int score, int total) =>
       'You got $score of $total right.';
 
   int get _score => results.where((r) => r == true).length;
 
-  /// The questions got wrong, with their 1-based place in the round.
-  List<(int, Question)> get _wrong => [
+  /// The questions got wrong (or right only after the hint), with their
+  /// 1-based place in the round and whether the hint was needed.
+  List<(int, Question, bool)> get _wrong => [
     for (var i = 0; i < questions.length && i < results.length; i++)
-      if (results[i] == false) (i + 1, questions[i]),
+      if (results[i] == false)
+        (
+          i + 1,
+          questions[i],
+          hinted != null && i < hinted!.length && hinted![i],
+        ),
   ];
 
   @override
@@ -126,11 +142,12 @@ class SessionSummaryView extends StatelessWidget {
         ),
         _WrongList(
           children: [
-            for (final (place, q) in wrong)
+            for (final (place, q, withHint) in wrong)
               _WrongQuestion(
                 question: q,
                 place: place,
                 total: questions.length,
+                hinted: withHint,
               ),
           ],
         ),
@@ -422,9 +439,13 @@ class _WrongQuestion extends StatelessWidget {
     required this.question,
     required this.place,
     required this.total,
+    this.hinted = false,
   });
 
   final Question question;
+
+  /// Right on the second try, after the hint (B22).
+  final bool hinted;
 
   /// 1-based place in the round, and the round's length.
   final int place;
@@ -447,6 +468,10 @@ class _WrongQuestion extends StatelessWidget {
           current: place,
           total: total,
         ),
+        if (hinted) ...[
+          const SizedBox(height: AppSpacing.s8),
+          Text(SessionSummaryView.rightWithHintText, style: type.caption),
+        ],
         if (q.game == GameType.match) ...[
           const SizedBox(height: AppSpacing.s8),
           Text(q.prompt, style: type.caption),
