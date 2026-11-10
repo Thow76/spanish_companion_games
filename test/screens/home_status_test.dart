@@ -96,7 +96,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 questions · Google Drive'), findsOneWidget);
-    expect(find.text('Fill the gap'), findsOneWidget);
+    expect(find.text('Recall'), findsOneWidget);
   });
 
   testWidgets('a slow time request does not hold up the questions', (
