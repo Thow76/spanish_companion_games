@@ -34,7 +34,7 @@ Both give wrong calls, not inconsistent ones. The spike should report how often,
 
 ---
 
-## Original note (from another conversation, 11 Nov 2026, unchanged)
+## Original note (from another conversation, 11 Nov 2026; text unchanged, title dropped and headings moved down a level)
 
 
 *A note from a conversation on 11 November 2026, written to be carried into the Spanish companion app project. The tool names below came from general knowledge during the conversation. They were not checked on the web, so check versions and licences before relying on them.*
