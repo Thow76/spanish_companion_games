@@ -8,7 +8,7 @@ import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
-import 'package:spanish_companion_games/screens/phase_games_screen.dart';
+import 'package:spanish_companion_games/screens/set_picker_screen.dart';
 
 Question _q(String id, GameType game, QuestionType type, String category) =>
     Question(
@@ -106,12 +106,32 @@ void main() {
     expect(find.text('Filter: Prepositions'), findsOneWidget);
 
     await _tapVisible(tester, find.byKey(const ValueKey('phase-card-2')));
-    final phase =
-        tester.widget<PhaseGamesScreen>(find.byType(PhaseGamesScreen));
-    expect([for (final q in phase.questions) q.id], ['a']);
-    await _tapVisible(tester, find.text(GameType.fillGap.label));
+    // The set picker shows the same filter and lists only 'a'.
+    expect(find.text('Filter: Prepositions'), findsOneWidget);
+    expect(find.text('1 set'), findsOneWidget);
+    await _tapVisible(tester, find.byKey(const ValueKey('set-card-0')));
     final screen = tester.widget<FillGapScreen>(find.byType(FillGapScreen));
     expect([for (final q in screen.questions) q.id], ['a']);
+  });
+
+  testWidgets('a type chosen on the set picker shows on home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await _tapVisible(tester, find.byKey(const ValueKey('phase-card-2')));
+    expect(find.byType(SetPickerScreen), findsOneWidget);
+    // No Phase row on the picker.
+    await _openFilter(tester);
+    expect(_chip('Phase', 'Recall'), findsNothing);
+    await _tapVisible(tester, _chip('Type', 'Language notes'));
+    expect(find.text('Filter: Language notes'), findsOneWidget);
+    expect(find.text('1 of 3 questions'), findsOneWidget);
+
+    await _tapVisible(tester, find.byTooltip(SetPickerScreen.backLabel));
+    expect(find.text('Filter: Language notes'), findsOneWidget);
+    expect(_countOn(2, '1'), findsOneWidget);
   });
 
   testWidgets('the filter is kept when the questions are reloaded', (
