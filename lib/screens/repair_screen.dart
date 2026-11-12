@@ -21,6 +21,12 @@
 /// try ends the question as before (corrected version, explanation, "You
 /// wrote"). Right on the second try shows "Right with a hint" and is
 /// recorded as not passed (`hinted`), so the item comes back.
+///
+/// Look (U18, proposed for the spec): the focus line is a [FocusLine]
+/// grouped with the field as its label; the hint is a [HintCard]; "Right
+/// with a hint" is a [HintedResultNote] on phones and the FeedbackPanel's
+/// heading on laptop, where the session panel marks the question with a
+/// lightbulb rather than a cross.
 library;
 
 import 'package:flutter/material.dart';
@@ -28,7 +34,6 @@ import 'package:flutter/material.dart';
 import '../models/answer_check.dart';
 import '../models/question.dart';
 import '../models/session_tally.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
@@ -203,6 +208,21 @@ class _RepairScreenState extends State<RepairScreen> {
       !(_hintShown &&
           normaliseAnswer(_controller.text) == normaliseAnswer(_firstTry));
 
+  /// The field's look: after a wrong first try it is coral with a cross
+  /// (still editable) until the text is changed from that try, mirroring
+  /// the mint border and tick of a right answer (U18 fix, Andrew
+  /// 2026-11-12).
+  AnswerFieldState get _fieldState {
+    if (_checked) {
+      return _correct ? AnswerFieldState.correct : AnswerFieldState.wrong;
+    }
+    if (_hintShown &&
+        normaliseAnswer(_controller.text) == normaliseAnswer(_firstTry)) {
+      return AnswerFieldState.tryAgain;
+    }
+    return AnswerFieldState.editing;
+  }
+
   void _resetField() {
     _controller.dispose();
     _controller = TextEditingController(text: _question.promptText);
@@ -302,6 +322,8 @@ class _RepairScreenState extends State<RepairScreen> {
   List<QuestionMark> get _marks => [
     for (var i = 0; i < _total; i++)
       switch (_results[i]) {
+        // Right with a hint (U18): its own mark, not a cross.
+        false when _hintedResults[i] => QuestionMark.hinted,
         true => QuestionMark.correct,
         false => QuestionMark.wrong,
         null => i == _index ? QuestionMark.current : QuestionMark.upcoming,
@@ -366,38 +388,46 @@ class _RepairScreenState extends State<RepairScreen> {
         missingWord: q.missingWord,
         corrected: _checked ? corrected : null,
       ),
-      _EmphasisText(
-        RepairScreen.focusText(q),
-        style: type.caption,
-        semanticsPrefix: 'Focus: ',
-      ),
-      AnswerField(
-        // A new key per question, so the field's own state starts afresh.
-        key: ValueKey('repair-field-${q.id}'),
-        controller: _controller,
-        state: !_checked
-            ? AnswerFieldState.editing
-            : (_correct ? AnswerFieldState.correct : AnswerFieldState.wrong),
-        caption: AnswerField.repairCaption,
-        onChanged: _onChanged,
-        onSubmitted: (_) => _check(),
-        focusNode: _fieldFocus,
-        semanticLabel: 'Your corrected sentence',
+      // The focus line is the field's label (U18): grouped with it, 8 apart.
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FocusLine(
+            text: _EmphasisText(
+              RepairScreen.focusText(q),
+              style: FocusLine.textStyle(context),
+              semanticsPrefix: 'Focus: ',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s8),
+          AnswerField(
+            // A new key per question, so the field's own state starts
+            // afresh.
+            key: ValueKey('repair-field-${q.id}'),
+            controller: _controller,
+            state: _fieldState,
+            caption: AnswerField.repairCaption,
+            onChanged: _onChanged,
+            onSubmitted: (_) => _check(),
+            focusNode: _fieldFocus,
+            semanticLabel: 'Your corrected sentence',
+          ),
+        ],
       ),
       if (_hintShown && !_checked)
-        _HintLine(text: RepairScreen.hintText(q))
-      else if (_checked && _hinted)
-        Semantics(
-          liveRegion: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(RepairScreen.rightWithHintText, style: type.body),
-              const SizedBox(height: AppSpacing.s4),
-              Text(RepairScreen.rightWithHintCaption, style: type.caption),
-            ],
+        HintCard(
+          text: _EmphasisText(
+            RepairScreen.hintText(q),
+            style: HintCard.textStyle(context),
+            semanticsPrefix: 'Hint: ',
           ),
+        )
+      // On laptop "Right with a hint" is the feedback panel's heading.
+      else if (_checked && _hinted && !laptop)
+        const HintedResultNote(
+          heading: RepairScreen.rightWithHintText,
+          caption: RepairScreen.rightWithHintCaption,
         ),
     ];
 
@@ -435,7 +465,12 @@ class _RepairScreenState extends State<RepairScreen> {
           SessionPanel(marks: _marks, showPlaceholder: !_checked),
           if (content != null) ...[
             const SizedBox(height: AppLayout.laptopCardGap),
-            FeedbackPanel(correct: _correct, content: content),
+            FeedbackPanel(
+              correct: _correct,
+              content: content,
+              heading: _hinted ? RepairScreen.rightWithHintText : null,
+              note: _hinted ? RepairScreen.rightWithHintCaption : null,
+            ),
           ],
         ],
       ),
@@ -477,43 +512,6 @@ class _EmphasisText extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The hint after a wrong first try (B22): a small lightbulb and the hint
-/// in body text, announced to screen readers. A stand-in until U18.
-class _HintLine extends StatelessWidget {
-  const _HintLine({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return Semantics(
-      liveRegion: true,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.s4),
-            child: const Icon(
-              Icons.lightbulb_outline_rounded,
-              size: AppSizes.iconSmall,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.s8),
-          Expanded(
-            child: _EmphasisText(
-              text,
-              style: type.body,
-              semanticsPrefix: 'Hint: ',
-            ),
-          ),
-        ],
       ),
     );
   }

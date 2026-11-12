@@ -156,8 +156,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Check'));
     await _letToastGo(tester);
-    // First try wrong: the hint, still editable (B22).
-    expect(_fieldState(tester), AnswerFieldState.editing);
+    // First try wrong: the hint, still editable (B22), the field coral
+    // with a cross (U18 fix).
+    expect(_fieldState(tester), AnswerFieldState.tryAgain);
 
     await tester.enterText(_field, 'Esto no hace un sentido para mí.');
     await tester.pump();
@@ -243,7 +244,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(_fieldState(tester), AnswerFieldState.editing);
+      // Coral with a cross, still editable (U18 fix).
+      expect(_fieldState(tester), AnswerFieldState.tryAgain);
       expect(find.text(PromptCard.correctedLabel), findsNothing);
       expect(find.text('You wrote'), findsNothing);
       // The same text again cannot be checked.
@@ -252,6 +254,12 @@ void main() {
       await tester.enterText(_field, '$first ');
       await tester.pump();
       expect(_button(tester).onPressed, isNull);
+      expect(_fieldState(tester), AnswerFieldState.tryAgain);
+
+      // Changing the text takes the coral away.
+      await tester.enterText(_field, 'El problema es muy difícil y la gente');
+      await tester.pump();
+      expect(_fieldState(tester), AnswerFieldState.editing);
     });
 
     testWidgets('no hint: the fallback names the category', (tester) async {

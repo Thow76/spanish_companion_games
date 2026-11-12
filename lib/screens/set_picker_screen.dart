@@ -15,11 +15,12 @@
 /// the home screen opens the game of the set's first question with the
 /// set's questions for that game.
 ///
-/// A stand-in look until U18, from existing widgets only: [HomeFrame], the
-/// B23 top bar ([AppIconButton.back] with the game-title style),
-/// [WordChip]s for the size (as the filter's choices), the theme's
-/// [SwitchListTile], and a [GameCard] per set (borrowing the phase card's
-/// icon and accent).
+/// Look (U18, proposed for the spec): [HomeFrame] without the laptop
+/// "Choose a game" title, the B23 top bar (back chevron and the phase name
+/// in the game-title style), a [SetOptionsCard] (questions per set, 5 or
+/// 10, and "By conversation"), the filter card, then "3 sets" as a phase
+/// heading and a [SetCard] per set (count in the phase's accent; a 2-column
+/// grid on laptop).
 library;
 
 import 'package:flutter/material.dart';
@@ -88,7 +89,7 @@ class SetPickerScreen extends StatefulWidget {
   /// Tooltip of the back button.
   static const String backLabel = 'Back';
 
-  static const String sizeLabel = 'Set size';
+  static const String sizeLabel = 'Questions per set';
   static const String byConversationLabel = 'By conversation';
   static const String byConversationHint =
       'Each set comes from one conversation.';
@@ -99,10 +100,12 @@ class SetPickerScreen extends StatefulWidget {
   /// The line over the list: "3 sets", "1 set".
   static String setCountText(int n) => n == 1 ? '1 set' : '$n sets';
 
-  /// The `game` value whose icon and accent the set cards borrow until U18
-  /// (the same as the phase's card on home).
-  static String borrowedGame(QuestionPhase phase) =>
-      phase == QuestionPhase.noticeAndCorrect ? 'choose_correction' : 'fill_gap';
+  /// The `game` value whose accent the phase uses (U18): the accent of its
+  /// card on home, also used for the set cards' counts.
+  static String accentGame(QuestionPhase phase) =>
+      phase == QuestionPhase.noticeAndCorrect
+      ? 'choose_correction'
+      : 'fill_gap';
 
   @override
   State<SetPickerScreen> createState() => _SetPickerScreenState();
@@ -140,7 +143,9 @@ class _SetPickerScreenState extends State<SetPickerScreen> {
       size: _choices.size,
       byConversation: _choices.byConversation,
     );
-    final game = SetPickerScreen.borrowedGame(widget.phase);
+    final accent = AppColors.gameAccent(
+      SetPickerScreen.accentGame(widget.phase),
+    );
 
     return HomeFrame(
       topBar: Padding(
@@ -161,8 +166,26 @@ class _SetPickerScreenState extends State<SetPickerScreen> {
         ),
       ),
       footer: HomeFrame.footerLine(context),
+      // The bar already names the phase; no "Choose a game" on laptop.
+      showLaptopTitle: false,
       children: [
-        SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
+        // On laptop the frame's own top padding is enough (no title here).
+        if (!laptop) const SizedBox(height: AppSpacing.s16),
+        // How the sets are made (U18): size and "by conversation" in one
+        // card, then the filter.
+        SetOptionsCard(
+          sizes: setSizes,
+          size: _choices.size,
+          onSizeChanged: (n) => _change(_choices.copyWith(size: n)),
+          byConversation: _choices.byConversation,
+          onByConversationChanged: (on) =>
+              _change(_choices.copyWith(byConversation: on)),
+          sizeLabel: SetPickerScreen.sizeLabel,
+          byConversationLabel: SetPickerScreen.byConversationLabel,
+          byConversationHint: SetPickerScreen.byConversationHint,
+          switchKey: const ValueKey('set-by-conversation'),
+        ),
+        const SizedBox(height: AppSpacing.s12),
         QuestionFilterCard(
           key: const ValueKey('set-filter'),
           filter: filter,
@@ -177,45 +200,7 @@ class _SetPickerScreenState extends State<SetPickerScreen> {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.s24),
-        Semantics(
-          header: true,
-          child: Text(SetPickerScreen.sizeLabel, style: type.caption),
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        Wrap(
-          spacing: AppSpacing.s8,
-          runSpacing: AppSpacing.s8,
-          children: [
-            for (final size in setSizes)
-              WordChip(
-                key: ValueKey('set-size-$size'),
-                label: SetPickerScreen.sizeText(size),
-                state: size == _choices.size
-                    ? WordChipState.placed
-                    : WordChipState.toPlace,
-                onPressed: size == _choices.size
-                    ? null
-                    : () => _change(_choices.copyWith(size: size)),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s12),
-        SwitchListTile(
-          key: const ValueKey('set-by-conversation'),
-          contentPadding: EdgeInsets.zero,
-          title: Text(
-            SetPickerScreen.byConversationLabel,
-            style: type.body.copyWith(color: AppColors.textPrimary),
-          ),
-          subtitle: Text(
-            SetPickerScreen.byConversationHint,
-            style: type.caption,
-          ),
-          value: _choices.byConversation,
-          onChanged: (on) => _change(_choices.copyWith(byConversation: on)),
-        ),
-        const SizedBox(height: AppSpacing.s16),
+        SizedBox(height: laptop ? AppSpacing.s32 : AppSpacing.s24),
         if (sets.isEmpty)
           Text(
             phaseQuestions.isEmpty
@@ -224,18 +209,24 @@ class _SetPickerScreenState extends State<SetPickerScreen> {
             style: type.caption,
           )
         else ...[
-          Text(SetPickerScreen.setCountText(sets.length), style: type.caption),
+          Semantics(
+            header: true,
+            child: Text(
+              SetPickerScreen.setCountText(sets.length),
+              style: type.phaseHeading,
+            ),
+          ),
           const SizedBox(height: AppSpacing.s12),
           HomeCardGrid(
             laptop: laptop,
             cards: [
               for (var i = 0; i < sets.length; i++)
-                GameCard(
+                SetCard(
                   key: ValueKey('set-card-$i'),
-                  game: game,
                   title: sets[i].title,
-                  description: sets[i].detail,
+                  detail: sets[i].detail,
                   count: sets[i].length,
+                  accent: accent,
                   onTap: () => widget.onSetSelected(sets[i]),
                 ),
             ],

@@ -76,10 +76,15 @@ class HomeFrame extends StatelessWidget {
     required this.topBar,
     required this.children,
     this.footer,
+    this.showLaptopTitle = true,
   });
 
   /// Usually a [HomeTopBar].
   final Widget topBar;
+
+  /// Whether the laptop page shows "Choose a game" under the bar. The set
+  /// picker (U18) turns it off: its bar already names the phase.
+  final bool showLaptopTitle;
 
   /// The phase groups (headings and cards).
   final List<Widget> children;
@@ -165,10 +170,11 @@ class HomeFrame extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Semantics(
-                          header: true,
-                          child: Text(laptopTitle, style: type.screenTitle),
-                        ),
+                        if (showLaptopTitle)
+                          Semantics(
+                            header: true,
+                            child: Text(laptopTitle, style: type.screenTitle),
+                          ),
                         ...children,
                       ],
                     ),
