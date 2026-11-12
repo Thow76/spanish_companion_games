@@ -1,4 +1,5 @@
-/// The home screen filter (B12).
+/// The question filter (B12). Since U18 it lives on the set picker only;
+/// home counts every question.
 library;
 
 import 'package:flutter/material.dart';
@@ -47,6 +48,9 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _openPicker(WidgetTester tester, int phase) =>
+    _tapVisible(tester, find.byKey(ValueKey('phase-card-$phase')));
+
 Future<void> _openFilter(WidgetTester tester) =>
     _tapVisible(tester, find.textContaining('Filter: '));
 
@@ -54,59 +58,43 @@ Finder _chip(String row, String label) =>
     find.byKey(ValueKey('filter-$row-$label'));
 
 void main() {
-  testWidgets('starts with every question', (tester) async {
+  testWidgets('home counts every question and has no filter', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Filter: All questions'), findsOneWidget);
+    expect(find.textContaining('Filter: '), findsNothing);
     expect(_countOn(1, '1'), findsOneWidget);
     expect(_countOn(2, '3'), findsOneWidget);
   });
 
-  testWidgets('choosing a type narrows the counts', (tester) async {
+  testWidgets('choosing a type on the picker narrows its sets', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
+    await _openPicker(tester, 2);
+    expect(find.byType(SetPickerScreen), findsOneWidget);
+    expect(find.text('Filter: All questions'), findsOneWidget);
     await _openFilter(tester);
+    // No Phase row on the picker.
+    expect(_chip('Phase', 'Recall'), findsNothing);
     await _tapVisible(tester, _chip('Type', 'Language notes'));
 
     expect(find.text('Filter: Language notes'), findsOneWidget);
-    expect(find.text('1 of 4 questions'), findsOneWidget);
-    expect(_countOn(2, '1'), findsOneWidget);
-    // The only phase 1 question (repair) is grammar.
-    final newCard = find.byKey(const ValueKey('phase-card-1'));
-    expect(
-      find.descendant(of: newCard, matching: find.text('No questions yet')),
-      findsOneWidget,
-    );
+    expect(find.text('1 of 3 questions'), findsOneWidget);
+    expect(find.text('1 set'), findsOneWidget);
 
     // "All" puts it back.
     await _tapVisible(tester, _chip('Type', 'All'));
     expect(find.text('Filter: All questions'), findsOneWidget);
-    expect(_countOn(2, '3'), findsOneWidget);
   });
 
-  testWidgets('choosing a phase shows only that choice', (tester) async {
+  testWidgets('a set opens with only the questions that pass', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    await _openFilter(tester);
-    await _tapVisible(tester, _chip('Phase', 'Recall'));
-
-    expect(find.byKey(const ValueKey('phase-card-1')), findsNothing);
-    expect(find.byKey(const ValueKey('phase-card-2')), findsOneWidget);
-  });
-
-  testWidgets('a game opens with only the questions that pass', (tester) async {
-    await tester.pumpWidget(_app(() async => _sample()));
-    await tester.pumpAndSettle();
-
+    await _openPicker(tester, 2);
     await _openFilter(tester);
     await _tapVisible(tester, _chip('Category', 'Prepositions'));
-    expect(find.text('Filter: Prepositions'), findsOneWidget);
-
-    await _tapVisible(tester, find.byKey(const ValueKey('phase-card-2')));
-    // The set picker shows the same filter and lists only 'a'.
     expect(find.text('Filter: Prepositions'), findsOneWidget);
     expect(find.text('1 set'), findsOneWidget);
     await _tapVisible(tester, find.byKey(const ValueKey('set-card-0')));
@@ -114,24 +102,24 @@ void main() {
     expect([for (final q in screen.questions) q.id], ['a']);
   });
 
-  testWidgets('a type chosen on the set picker shows on home', (
+  testWidgets('a filter on the picker leaves home counts alone', (
     tester,
   ) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    await _tapVisible(tester, find.byKey(const ValueKey('phase-card-2')));
-    expect(find.byType(SetPickerScreen), findsOneWidget);
-    // No Phase row on the picker.
+    await _openPicker(tester, 2);
     await _openFilter(tester);
-    expect(_chip('Phase', 'Recall'), findsNothing);
     await _tapVisible(tester, _chip('Type', 'Language notes'));
-    expect(find.text('Filter: Language notes'), findsOneWidget);
-    expect(find.text('1 of 3 questions'), findsOneWidget);
 
     await _tapVisible(tester, find.byTooltip(SetPickerScreen.backLabel));
+    expect(find.textContaining('Filter: '), findsNothing);
+    expect(_countOn(1, '1'), findsOneWidget);
+    expect(_countOn(2, '3'), findsOneWidget);
+
+    // The picker still has it when opened again.
+    await _openPicker(tester, 2);
     expect(find.text('Filter: Language notes'), findsOneWidget);
-    expect(_countOn(2, '1'), findsOneWidget);
   });
 
   testWidgets('the filter is kept when the questions are reloaded', (
@@ -140,27 +128,14 @@ void main() {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
+    await _openPicker(tester, 2);
     await _openFilter(tester);
     await _tapVisible(tester, _chip('Type', 'Grammar errors'));
-    expect(find.text('Filter: Grammar errors'), findsOneWidget);
+    await _tapVisible(tester, find.byTooltip(SetPickerScreen.backLabel));
 
     await tester.tap(find.byTooltip('Reload questions'));
     await tester.pumpAndSettle();
+    await _openPicker(tester, 2);
     expect(find.text('Filter: Grammar errors'), findsOneWidget);
-  });
-
-  testWidgets('nothing matching says so', (tester) async {
-    await tester.pumpWidget(_app(() async => _sample()));
-    await tester.pumpAndSettle();
-
-    await _openFilter(tester);
-    await _tapVisible(tester, _chip('Type', 'Language notes'));
-    await _tapVisible(tester, _chip('Category', 'Word order'));
-
-    expect(find.text('0 of 4 questions'), findsOneWidget);
-    expect(
-      find.textContaining('No questions match this filter.'),
-      findsOneWidget,
-    );
   });
 }

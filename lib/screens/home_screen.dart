@@ -6,14 +6,10 @@
 /// B25's player, tapping a set opens the game of its first question with
 /// the set's questions for that game.
 ///
-/// A filter card above the choices (B12) narrows the questions to one type
-/// (grammar errors or language notes), one phase, or one category, or any
-/// mix of the three; the counts follow it, and choosing a phase shows only
-/// that phase's choice. The set picker shows the same filter without its
-/// Phase row, so a type or category chosen there shows here too. The
-/// filter and the picker's choices are kept for the app session, including
-/// a reload. (The card stays on home for now because an existing
-/// screenshot test drives it there; see B24's notes.)
+/// The filter (B12, type and category) is on the set picker only (U18):
+/// home counts every question, so a phase never looks empty because of a
+/// filter chosen elsewhere. The filter and the picker's choices are kept
+/// for the app session, including a reload.
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
@@ -25,10 +21,11 @@
 /// fails). When results are waiting to reach the Test Review sheet (B18),
 /// a line under the top bar says how many, with "Send again".
 ///
-/// Look: [HomeFrame] with [HomeTopBar]. The two choices are [GameCard]s
-/// standing in until U18 (phase 1 with the Choose a correction icon and
-/// accent, phase 2 with Fill the gap's), with the [PhaseHeading] copy as
-/// their descriptions; phone one column, laptop side by side.
+/// Look (U18, proposed for the spec): [HomeFrame] with [HomeTopBar]. The two
+/// choices are [GameCard]s with their own icons (an edit-note icon for New
+/// corrections, a replay icon for Recall) in the accents of their first
+/// games (pink, cyan), with the [PhaseHeading] copy as their descriptions;
+/// phone one column, laptop side by side.
 library;
 
 import 'package:flutter/material.dart';
@@ -37,7 +34,6 @@ import '../data/drive_source.dart';
 import '../data/question_loader.dart';
 import '../data/results_sync.dart';
 import '../models/question.dart';
-import '../models/question_filter.dart';
 import '../models/question_parser.dart';
 import '../models/question_sets.dart';
 import '../models/session_tally.dart';
@@ -51,7 +47,6 @@ import 'fill_gap_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
 import 'home_card_grid.dart';
-import 'question_filter_card.dart';
 import 'repair_screen.dart';
 import 'set_picker_screen.dart';
 import 'spot_error_screen.dart';
@@ -149,6 +144,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Opens [phase]'s set picker (B24) with every question of that phase;
   /// the picker applies the filter's type and category itself.
   void _openPhase(QuestionPhase phase, List<Question> questions) {
+    // A category the reloaded file no longer has is dropped, so the picker
+    // never starts empty for a reason that can't be seen.
+    _choices = _choices.copyWith(
+      filter: _choices.filter.keepingCategoryIn(questions),
+    );
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => SetPickerScreen(
@@ -224,16 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
         final parsed = snapshot.data!;
-        // A category the new file no longer has is dropped, so a reload
-        // never leaves every game empty for a reason that can't be seen.
-        final filter = _choices.filter.keepingCategoryIn(parsed.questions);
-        final shown = filter.apply(parsed.questions);
         return _LoadedView(
           parsed: parsed,
-          shown: shown,
-          filter: filter,
-          onFilterChanged: (f) =>
-              setState(() => _choices = _choices.copyWith(filter: f)),
           sourceLine: sourceLineText(
             parsed.questions.length,
             widget.sourceName,
@@ -307,9 +299,6 @@ String? _webAddress() {
 class _LoadedView extends StatelessWidget {
   const _LoadedView({
     required this.parsed,
-    required this.shown,
-    required this.filter,
-    required this.onFilterChanged,
     required this.sourceLine,
     required this.onReload,
     required this.onPhaseSelected,
@@ -317,52 +306,47 @@ class _LoadedView extends StatelessWidget {
   });
 
   final ParsedQuestions parsed;
-
-  /// The questions that pass [filter], in file order.
-  final List<Question> shown;
-  final QuestionFilter filter;
-  final ValueChanged<QuestionFilter> onFilterChanged;
   final String sourceLine;
   final VoidCallback onReload;
   final ValueChanged<QuestionPhase> onPhaseSelected;
   final ResultsSync? resultsSync;
 
-  /// The two choices' titles and descriptions (the [PhaseHeading] copy),
-  /// and the game whose icon and accent each card borrows until U18.
-  static const Map<QuestionPhase, (String, String, String)> choiceCopy = {
+  /// The two choices' titles and descriptions (the [PhaseHeading] copy)
+  /// and their icons (U18, proposed for the spec). The accent comes from
+  /// [SetPickerScreen.accentGame].
+  static const Map<QuestionPhase, (String, String, IconData)> choiceCopy = {
     QuestionPhase.noticeAndCorrect: (
       'New corrections',
       'Your own mistakes, marked. Put them right.',
-      'choose_correction',
+      Icons.edit_note_rounded,
     ),
     QuestionPhase.recall: (
       'Recall',
       "Points you've corrected, in new sentences.",
-      'fill_gap',
+      Icons.replay_rounded,
     ),
   };
 
   @override
   Widget build(BuildContext context) {
+    // Every question counts here (U18): the filter lives on the set
+    // picker, so a phase can never look empty because of a filter that
+    // can't be seen or undone from home.
     final counts = <QuestionPhase, int>{
       for (final p in QuestionPhase.values) p: 0,
     };
-    for (final q in shown) {
+    for (final q in parsed.questions) {
       counts[q.game.phase] = counts[q.game.phase]! + 1;
     }
-    final showNew =
-        filter.phase == null || filter.phase == QuestionPhase.noticeAndCorrect;
-    final showRecall =
-        filter.phase == null || filter.phase == QuestionPhase.recall;
-    final type = AppTypography.of(context);
     final laptop = FormFactor.of(context) == FormFactor.laptop;
 
     Widget choice(QuestionPhase phase) {
-      final (title, description, game) = choiceCopy[phase]!;
+      final (title, description, icon) = choiceCopy[phase]!;
       final count = counts[phase]!;
       return GameCard(
         key: ValueKey('phase-card-${phase.number}'),
-        game: game,
+        game: SetPickerScreen.accentGame(phase),
+        icon: icon,
         title: title,
         description: description,
         count: count,
@@ -380,33 +364,19 @@ class _LoadedView extends StatelessWidget {
           SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
           _ProblemsNotice(problems: parsed.problems),
         ],
-        // What to play (B12).
+        // The two choices (B23): phase 1, Andrew's own sentences with the
+        // mistake marked; phase 2, points already corrected, in new
+        // sentences.
         SizedBox(
           height: parsed.hasProblems
               ? AppSpacing.s12
               : (laptop ? AppSpacing.s24 : AppSpacing.s16),
         ),
-        QuestionFilterCard(
-          key: const ValueKey('home-filter'),
-          filter: filter,
-          categories: QuestionFilter.categoriesOf(parsed.questions),
-          shownCount: shown.length,
-          totalCount: parsed.questions.length,
-          onChanged: onFilterChanged,
-        ),
-        if (shown.isEmpty && parsed.questions.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s12),
-          Text(QuestionFilterCard.noMatchText, style: type.caption),
-        ],
-        // The two choices (B23): phase 1, Andrew's own sentences with the
-        // mistake marked; phase 2, points already corrected, in new
-        // sentences.
-        SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
         HomeCardGrid(
           laptop: laptop,
           cards: [
-            if (showNew) choice(QuestionPhase.noticeAndCorrect),
-            if (showRecall) choice(QuestionPhase.recall),
+            choice(QuestionPhase.noticeAndCorrect),
+            choice(QuestionPhase.recall),
           ],
         ),
       ],
@@ -533,8 +503,9 @@ class _ErrorView extends StatelessWidget {
 /// Under the top bar (B20): "2 results not saved yet" and a "Send again"
 /// button while results wait to reach the Test Review sheet (B18), using
 /// [ResultsSync.send]; "Saving 2 results…" while a send is on its way.
-/// Nothing at all when every result is saved. Muted caption, as the spec
-/// has no copy for it.
+/// Nothing at all when every result is saved. Muted caption with "Send
+/// again" as a caption-sized accent link (U18), as the spec has no copy
+/// for it.
 class UnsavedResultsLine extends StatelessWidget {
   const UnsavedResultsLine({super.key, required this.sync});
 
@@ -572,9 +543,23 @@ class UnsavedResultsLine extends StatelessWidget {
                   sending ? savingText(count) : '${unsavedText(count)} ·',
                   style: type.caption,
                 ),
+                // U18: the same size as the caption beside it, in accent
+                // weight 600, still a 44-high tap target.
                 if (!sending)
                   TextButton(
                     onPressed: sync.send,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      textStyle: type.caption.withWeight(600),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.s8,
+                      ),
+                      minimumSize: const Size(
+                        AppSizes.minTarget,
+                        AppSizes.minTarget,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
                     child: const Text(retryLabel),
                   ),
               ],
