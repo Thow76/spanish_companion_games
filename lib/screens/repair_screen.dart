@@ -208,6 +208,21 @@ class _RepairScreenState extends State<RepairScreen> {
       !(_hintShown &&
           normaliseAnswer(_controller.text) == normaliseAnswer(_firstTry));
 
+  /// The field's look: after a wrong first try it is coral with a cross
+  /// (still editable) until the text is changed from that try, mirroring
+  /// the mint border and tick of a right answer (U18 fix, Andrew
+  /// 2026-11-12).
+  AnswerFieldState get _fieldState {
+    if (_checked) {
+      return _correct ? AnswerFieldState.correct : AnswerFieldState.wrong;
+    }
+    if (_hintShown &&
+        normaliseAnswer(_controller.text) == normaliseAnswer(_firstTry)) {
+      return AnswerFieldState.tryAgain;
+    }
+    return AnswerFieldState.editing;
+  }
+
   void _resetField() {
     _controller.dispose();
     _controller = TextEditingController(text: _question.promptText);
@@ -391,11 +406,7 @@ class _RepairScreenState extends State<RepairScreen> {
             // afresh.
             key: ValueKey('repair-field-${q.id}'),
             controller: _controller,
-            state: !_checked
-                ? AnswerFieldState.editing
-                : (_correct
-                      ? AnswerFieldState.correct
-                      : AnswerFieldState.wrong),
+            state: _fieldState,
             caption: AnswerField.repairCaption,
             onChanged: _onChanged,
             onSubmitted: (_) => _check(),
