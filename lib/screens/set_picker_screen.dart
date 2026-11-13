@@ -11,9 +11,9 @@
 /// The choices are kept for the app session: they live on the home screen,
 /// which passes them in and is told of every change.
 ///
-/// Tapping a set calls [SetPickerScreen.onSetSelected]; until B25's player
-/// the home screen opens the game of the set's first question with the
-/// set's questions for that game.
+/// Tapping a set calls [SetPickerScreen.onSetSelected] with the list of
+/// sets as shown and the one tapped; the home screen opens the set player
+/// (B25), which can move on to the next set in that list.
 ///
 /// Look (U18, proposed for the spec): [HomeFrame] without the laptop
 /// "Choose a game" title, the B23 top bar (back chevron and the phase name
@@ -37,6 +37,9 @@ import 'home_card_grid.dart';
 import 'question_filter_card.dart';
 
 /// What the picker remembers for the app session.
+/// A set was tapped: the sets as listed, and the index of the one tapped.
+typedef SetSelected = void Function(List<QuestionSet> sets, int index);
+
 class SetChoices {
   const SetChoices({
     this.filter = QuestionFilter.all,
@@ -83,8 +86,8 @@ class SetPickerScreen extends StatefulWidget {
   /// Told of every change, so the home screen keeps the choices.
   final ValueChanged<SetChoices> onChoicesChanged;
 
-  /// A set was tapped.
-  final ValueChanged<QuestionSet> onSetSelected;
+  /// A set was tapped (B25: with the whole list, for "Next set").
+  final SetSelected onSetSelected;
 
   /// Tooltip of the back button.
   static const String backLabel = 'Back';
@@ -227,7 +230,7 @@ class _SetPickerScreenState extends State<SetPickerScreen> {
                   detail: sets[i].detail,
                   count: sets[i].length,
                   accent: accent,
-                  onTap: () => widget.onSetSelected(sets[i]),
+                  onTap: () => widget.onSetSelected(sets, i),
                 ),
             ],
           ),

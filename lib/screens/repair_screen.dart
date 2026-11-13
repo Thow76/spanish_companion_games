@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/round_result.dart';
 import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
@@ -46,7 +47,13 @@ import 'session_summary_view.dart';
 /// Questions from other games, and repair questions with nothing marked,
 /// are skipped (the parser already rejects the latter).
 class RepairScreen extends StatefulWidget {
-  const RepairScreen({super.key, required this.questions, this.session});
+  const RepairScreen({
+    super.key,
+    required this.questions,
+    this.session,
+    this.onFinished,
+    this.lastInSet = true,
+  });
 
   final List<Question> questions;
 
@@ -54,6 +61,15 @@ class RepairScreen extends StatefulWidget {
   /// home screen. Each checked question is recorded in it. Null (tests)
   /// means the summary counts this round only.
   final SessionTally? session;
+
+  /// B25: set by the set player. After the last question the screen hands
+  /// its round back through this instead of showing its own summary. Null
+  /// (a game opened on its own, tests): the screen ends with its summary.
+  final RoundFinished? onFinished;
+
+  /// B25, with [onFinished]: whether this round is the set's last, so its
+  /// last question reads "See results"; otherwise "Next question".
+  final bool lastInSet;
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction = 'Correct the marked words';
@@ -199,6 +215,11 @@ class _RepairScreenState extends State<RepairScreen> {
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
 
+  /// The last question ends with "See results", unless the set player
+  /// (B25) has more rounds to come.
+  bool get _seeResults =>
+      _isLast && (widget.onFinished == null || widget.lastInSet);
+
   /// Check is enabled once the field differs from the prefilled sentence
   /// (spec section 6) and, on the second try, from the first try (B22).
   bool get _canCheck =>
@@ -281,6 +302,16 @@ class _RepairScreenState extends State<RepairScreen> {
 
   void _next() {
     if (!_checked) return;
+    if (_isLast && widget.onFinished != null) {
+      widget.onFinished!(
+        RoundResult(
+          questions: _questions,
+          results: List.of(_results),
+          hinted: List.of(_hintedResults),
+        ),
+      );
+      return;
+    }
     setState(() {
       if (_isLast) {
         _finished = true;
@@ -434,7 +465,7 @@ class _RepairScreenState extends State<RepairScreen> {
     final String actionLabel;
     final VoidCallback? onAction;
     if (_checked) {
-      actionLabel = _isLast ? 'See results' : 'Next question';
+      actionLabel = _seeResults ? 'See results' : 'Next question';
       onAction = _next;
     } else {
       actionLabel = 'Check';
@@ -455,7 +486,7 @@ class _RepairScreenState extends State<RepairScreen> {
       primaryButton: _checked
           ? PrimaryButton.next(
               onPressed: _next,
-              last: _isLast,
+              last: _seeResults,
               focusNode: _nextButtonFocus,
             )
           : PrimaryButton.check(onPressed: onAction),

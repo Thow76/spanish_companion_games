@@ -29,6 +29,7 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/round_result.dart';
 import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
@@ -47,6 +48,8 @@ class OrderScreen extends StatefulWidget {
     required this.questions,
     this.random,
     this.session,
+    this.onFinished,
+    this.lastInSet = true,
   });
 
   final List<Question> questions;
@@ -56,6 +59,15 @@ class OrderScreen extends StatefulWidget {
   /// home screen. Each checked question is recorded in it. Null (tests)
   /// means the summary counts this round only.
   final SessionTally? session;
+
+  /// B25: set by the set player. After the last question the screen hands
+  /// its round back through this instead of showing its own summary. Null
+  /// (a game opened on its own, tests): the screen ends with its summary.
+  final RoundFinished? onFinished;
+
+  /// B25, with [onFinished]: whether this round is the set's last, so its
+  /// last question reads "See results"; otherwise "Next question".
+  final bool lastInSet;
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction = 'Put the words in order';
@@ -153,6 +165,11 @@ class _OrderScreenState extends State<OrderScreen> {
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
 
+  /// The last question ends with "See results", unless the set player
+  /// (B25) has more rounds to come.
+  bool get _seeResults =>
+      _isLast && (widget.onFinished == null || widget.lastInSet);
+
   /// The sentence as built so far.
   String get _built => _placed.map((i) => _words[i]).join(' ');
 
@@ -213,6 +230,12 @@ class _OrderScreenState extends State<OrderScreen> {
 
   void _next() {
     if (!_checked) return;
+    if (_isLast && widget.onFinished != null) {
+      widget.onFinished!(
+        RoundResult(questions: _questions, results: List.of(_results)),
+      );
+      return;
+    }
     setState(() {
       if (_isLast) {
         _finished = true;
@@ -329,7 +352,7 @@ class _OrderScreenState extends State<OrderScreen> {
     final String actionLabel;
     final VoidCallback? onAction;
     if (_checked) {
-      actionLabel = _isLast ? 'See results' : 'Next question';
+      actionLabel = _seeResults ? 'See results' : 'Next question';
       onAction = _next;
     } else {
       actionLabel = 'Check';
@@ -350,7 +373,7 @@ class _OrderScreenState extends State<OrderScreen> {
       primaryButton: _checked
           ? PrimaryButton.next(
               onPressed: _next,
-              last: _isLast,
+              last: _seeResults,
               focusNode: _nextButtonFocus,
             )
           : PrimaryButton.check(onPressed: onAction),

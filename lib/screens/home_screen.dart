@@ -2,9 +2,10 @@
 /// and "Recall" (phase 2), each with the number of questions in it (0 =
 /// dimmed, can't be opened), and a reload button in the top bar. Tapping a
 /// choice opens the set picker for that phase ([SetPickerScreen], B24):
-/// set size, "by conversation", the filter and the list of sets. Until
-/// B25's player, tapping a set opens the game of its first question with
-/// the set's questions for that game.
+/// set size, "by conversation", the filter and the list of sets. Tapping a
+/// set opens the set player ([SetPlayerScreen], B25), which plays it across
+/// its games and ends with one summary and "Next set". The games are no
+/// longer opened on their own from home.
 ///
 /// The filter (B12, type and category) is on the set picker only (U18):
 /// home counts every question, so a phase never looks empty because of a
@@ -42,14 +43,9 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
-import 'choose_correction_screen.dart';
-import 'fill_gap_screen.dart';
-import 'match_screen.dart';
-import 'order_screen.dart';
 import 'home_card_grid.dart';
-import 'repair_screen.dart';
 import 'set_picker_screen.dart';
-import 'spot_error_screen.dart';
+import 'set_player_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
 typedef QuestionSource = Future<ParsedQuestions> Function();
@@ -156,52 +152,25 @@ class _HomeScreenState extends State<HomeScreen> {
           questions: questions.where((q) => q.game.phase == phase).toList(),
           choices: _choices,
           onChoicesChanged: (c) => setState(() => _choices = c),
-          onSetSelected: _openSet,
+          onSetSelected: (sets, index) => _openSet(phase, sets, index),
         ),
       ),
     );
   }
 
-  /// A set was tapped (B24). Until B25's player plays a whole set across
-  /// games, this opens the game of the set's first question with the set's
-  /// questions for that game.
-  void _openSet(QuestionSet set) {
-    if (set.questions.isEmpty) return;
-    final game = set.questions.first.game;
-    _openGame(game, set.questions.where((q) => q.game == game).toList());
-  }
-
-  void _openGame(GameType game, List<Question> questions) {
+  /// A set was tapped: the set player (B25) plays it across its games, with
+  /// the picker's list so "Next set" can move on. Every check goes into the
+  /// app session's tally (B7).
+  void _openSet(QuestionPhase phase, List<QuestionSet> sets, int index) {
+    if (index < 0 || index >= sets.length) return;
     Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => switch (game) {
-          // Every game has its own screen; each records its results in the
-          // session tally for the end-of-session summary (B7).
-          GameType.chooseCorrection => ChooseCorrectionScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.repair => RepairScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.fillGap => FillGapScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.order => OrderScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.match => MatchScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.spotError => SpotErrorScreen(
-            questions: questions,
-            session: _session,
-          ),
-        },
+        builder: (_) => SetPlayerScreen(
+          phase: phase,
+          sets: sets,
+          index: index,
+          session: _session,
+        ),
       ),
     );
   }

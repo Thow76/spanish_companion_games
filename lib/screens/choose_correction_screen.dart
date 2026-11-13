@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/round_result.dart';
 import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_typography.dart';
@@ -34,6 +35,8 @@ class ChooseCorrectionScreen extends StatefulWidget {
     super.key,
     required this.questions,
     this.session,
+    this.onFinished,
+    this.lastInSet = true,
   });
 
   final List<Question> questions;
@@ -42,6 +45,15 @@ class ChooseCorrectionScreen extends StatefulWidget {
   /// home screen. Each checked question is recorded in it. Null (tests)
   /// means the summary counts this round only.
   final SessionTally? session;
+
+  /// B25: set by the set player. After the last question the screen hands
+  /// its round back through this instead of showing its own summary. Null
+  /// (a game opened on its own, tests): the screen ends with its summary.
+  final RoundFinished? onFinished;
+
+  /// B25, with [onFinished]: whether this round is the set's last, so its
+  /// last question reads "See results"; otherwise "Next question".
+  final bool lastInSet;
 
   /// Instruction above the prompt card (spec section 8).
   static const String instruction =
@@ -81,9 +93,7 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
   /// the bottom button in portrait and on laptop, the top-bar link in phone
   /// landscape.
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
-  final FocusNode _topBarActionFocus = FocusNode(
-    debugLabel: 'Top bar action',
-  );
+  final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
 
   @override
   void initState() {
@@ -104,6 +114,11 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
+
+  /// The last question ends with "See results", unless the set player
+  /// (B25) has more rounds to come.
+  bool get _seeResults =>
+      _isLast && (widget.onFinished == null || widget.lastInSet);
 
   void _choose(String option) {
     if (_checked) return;
@@ -141,6 +156,12 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
 
   void _next() {
     if (!_checked) return;
+    if (_isLast && widget.onFinished != null) {
+      widget.onFinished!(
+        RoundResult(questions: _questions, results: List.of(_results)),
+      );
+      return;
+    }
     setState(() {
       if (_isLast) {
         _finished = true;
@@ -257,7 +278,7 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
     final String actionLabel;
     final VoidCallback? onAction;
     if (_checked) {
-      actionLabel = _isLast ? 'See results' : 'Next question';
+      actionLabel = _seeResults ? 'See results' : 'Next question';
       onAction = _next;
     } else {
       actionLabel = 'Check';
@@ -278,7 +299,7 @@ class _ChooseCorrectionScreenState extends State<ChooseCorrectionScreen> {
       primaryButton: _checked
           ? PrimaryButton.next(
               onPressed: _next,
-              last: _isLast,
+              last: _seeResults,
               focusNode: _nextButtonFocus,
             )
           : PrimaryButton.check(onPressed: onAction),
@@ -316,9 +337,7 @@ class _EmptyView extends StatelessWidget {
         onBack: onBack,
       ),
       primaryButton: PrimaryButton(label: 'Back to games', onPressed: onBack),
-      children: [
-        Text('No questions for this game yet.', style: type.body),
-      ],
+      children: [Text('No questions for this game yet.', style: type.body)],
     );
   }
 }

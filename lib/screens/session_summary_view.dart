@@ -37,6 +37,14 @@
 /// B22: a Repair question right only after the hint counts as not passed,
 /// so it is listed under "To look at again", with "Right with a hint" under
 /// its chip row.
+///
+/// B25: the set player shows this once at the end of a set, with every
+/// round's questions joined, the phase name as [topBarTitle], and "Next set"
+/// ([onNextSet]) alongside "Play again". With a next set, "Next set" is the
+/// primary action (bottom button on phones, top-bar link in landscape,
+/// first in the laptop side panel) and "Play again" becomes a secondary
+/// outlined button, beside "Copy results"; after the last set "Play again"
+/// stays the primary action as before.
 library;
 
 import 'package:flutter/material.dart';
@@ -62,9 +70,21 @@ class SessionSummaryView extends StatelessWidget {
     required this.onBack,
     this.session,
     this.hinted,
+    this.topBarTitle,
+    this.onNextSet,
   });
 
+  /// The round's game: its name is the top bar's title unless
+  /// [topBarTitle] is given.
   final GameType game;
+
+  /// The top bar's title instead of the game's name (B25: the phase name,
+  /// as a set mixes games).
+  final String? topBarTitle;
+
+  /// Starts the next set (B25). Null when there is none (the last set, or
+  /// a game played on its own): no "Next set".
+  final VoidCallback? onNextSet;
 
   /// The round's questions, in the order played.
   final List<Question> questions;
@@ -92,6 +112,8 @@ class SessionSummaryView extends StatelessWidget {
   static const String allRightText = 'You got every question right.';
   static const String alreadyCorrectText = 'This sentence was already correct.';
   static const String rightWithHintText = 'Right with a hint';
+  static const String playAgainLabel = 'Play again';
+  static const String nextSetLabel = 'Next set';
 
   static String scoreText(int score, int total) =>
       'You got $score of $total right.';
@@ -121,6 +143,7 @@ class SessionSummaryView extends StatelessWidget {
       Semantics(header: true, child: Text(title, style: type.cardTitle)),
       Text(scoreText(_score, questions.length), style: type.body),
       _SessionScores(tally: tally),
+      if (!laptop && onNextSet != null) _playAgainSecondary(),
       if (!laptop) CopyResultsButton(tally: tally),
       if (!laptop && tally.sync != null) ResultsSyncStatus(sync: tally.sync!),
       if (wrong.isEmpty)
@@ -154,10 +177,17 @@ class SessionSummaryView extends StatelessWidget {
       ],
     ];
 
-    final playAgain = PrimaryButton(
-      label: 'Play again',
-      onPressed: onPlayAgain,
-      trailingIcon: Icons.refresh_rounded,
+    // With a next set (B25), "Next set" is the primary action and "Play
+    // again" a secondary button; otherwise "Play again" as before.
+    final nextSet = onNextSet;
+    final primaryLabel = nextSet == null ? playAgainLabel : nextSetLabel;
+    final VoidCallback primaryAction = nextSet ?? onPlayAgain;
+    final primary = PrimaryButton(
+      label: primaryLabel,
+      onPressed: primaryAction,
+      trailingIcon: nextSet == null
+          ? Icons.refresh_rounded
+          : Icons.arrow_forward_rounded,
     );
     final sessionPanel = SessionPanel(
       marks: [
@@ -168,21 +198,25 @@ class SessionSummaryView extends StatelessWidget {
 
     return GameFrame(
       topBar: GameTopBar(
-        title: game.label,
+        title: topBarTitle ?? game.label,
         onBack: onBack,
-        actionLabel: 'Play again',
-        onAction: onPlayAgain,
+        actionLabel: primaryLabel,
+        onAction: primaryAction,
       ),
       // On laptop the button goes in the side panel instead of under the
       // list, so it is never below the fold.
-      primaryButton: laptop ? null : playAgain,
+      primaryButton: laptop ? null : primary,
       sidePanel: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           sessionPanel,
           const SizedBox(height: AppSpacing.s16),
-          playAgain,
+          primary,
+          if (nextSet != null) ...[
+            const SizedBox(height: AppSpacing.s12),
+            _playAgainSecondary(),
+          ],
           const SizedBox(height: AppSpacing.s12),
           CopyResultsButton(tally: tally),
           if (tally.sync != null) ...[
@@ -194,6 +228,21 @@ class SessionSummaryView extends StatelessWidget {
       children: rows,
     );
   }
+
+  /// "Play again" as a secondary (outlined) button, when "Next set" is the
+  /// primary action (B25). Same style as "Copy results".
+  Widget _playAgainSecondary() => FocusRing(
+    radius: AppRadius.control,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppSizes.primaryButton),
+      child: OutlinedButton.icon(
+        key: const ValueKey('summary-play-again'),
+        onPressed: onPlayAgain,
+        icon: const Icon(Icons.refresh_rounded, size: AppSizes.iconSmall),
+        label: const Text(playAgainLabel, textAlign: TextAlign.center),
+      ),
+    ),
+  );
 }
 
 /// "Copy results" (B17): copies [SessionTally.resultsText] to the

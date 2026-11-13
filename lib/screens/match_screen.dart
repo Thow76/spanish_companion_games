@@ -34,6 +34,7 @@ import 'package:flutter/material.dart';
 
 import '../models/answer_check.dart';
 import '../models/question.dart';
+import '../models/round_result.dart';
 import '../models/session_tally.dart';
 import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
@@ -53,6 +54,8 @@ class MatchScreen extends StatefulWidget {
     required this.questions,
     this.random,
     this.session,
+    this.onFinished,
+    this.lastInSet = true,
   });
 
   final List<Question> questions;
@@ -61,6 +64,15 @@ class MatchScreen extends StatefulWidget {
   /// home screen. Each checked question is recorded in it. Null (tests)
   /// means the summary counts this round only.
   final SessionTally? session;
+
+  /// B25: set by the set player. After the last question the screen hands
+  /// its round back through this instead of showing its own summary. Null
+  /// (a game opened on its own, tests): the screen ends with its summary.
+  final RoundFinished? onFinished;
+
+  /// B25, with [onFinished]: whether this round is the set's last, so its
+  /// last question reads "See results"; otherwise "Next question".
+  final bool lastInSet;
   final Random? random;
 
   /// How long a wrong pairing shows coral before both tiles go back.
@@ -144,9 +156,7 @@ class _MatchScreenState extends State<MatchScreen> {
   /// "Next question" gets keyboard focus once the question is done (spec
   /// section 10).
   final FocusNode _nextButtonFocus = FocusNode(debugLabel: 'Next question');
-  final FocusNode _topBarActionFocus = FocusNode(
-    debugLabel: 'Top bar action',
-  );
+  final FocusNode _topBarActionFocus = FocusNode(debugLabel: 'Top bar action');
 
   @override
   void initState() {
@@ -170,6 +180,11 @@ class _MatchScreenState extends State<MatchScreen> {
   Question get _question => _questions[_index];
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
+
+  /// The last question ends with "See results", unless the set player
+  /// (B25) has more rounds to come.
+  bool get _seeResults =>
+      _isLast && (widget.onFinished == null || widget.lastInSet);
   bool get _correct => _wrongTries.isEmpty;
 
   /// Ends a wrong flash early (the next tap does not wait for it).
@@ -267,6 +282,12 @@ class _MatchScreenState extends State<MatchScreen> {
 
   void _next() {
     if (!_done) return;
+    if (_isLast && widget.onFinished != null) {
+      widget.onFinished!(
+        RoundResult(questions: _questions, results: List.of(_results)),
+      );
+      return;
+    }
     setState(() {
       if (_isLast) {
         _finished = true;
@@ -436,14 +457,14 @@ class _MatchScreenState extends State<MatchScreen> {
         onBack: _goHome,
         current: _index + 1,
         total: _total,
-        actionLabel: _isLast ? 'See results' : 'Next question',
+        actionLabel: _seeResults ? 'See results' : 'Next question',
         onAction: onAction,
         actionFocusNode: _topBarActionFocus,
       ),
       explanation: content == null ? null : ExplanationCard(content: content),
       primaryButton: PrimaryButton.next(
         onPressed: onAction,
-        last: _isLast,
+        last: _seeResults,
         focusNode: _nextButtonFocus,
       ),
       sidePanel: Column(

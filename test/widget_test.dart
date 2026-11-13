@@ -157,7 +157,7 @@ void main() {
     expect(screen.choices.byConversation, isTrue);
   });
 
-  // Until B25, a set opens the game of its first question.
+  // A set opens the set player (B25) on its first round's game.
   for (final (game, phase, type) in [
     (GameType.order, 'Recall', OrderScreen),
     (GameType.fillGap, 'Recall', FillGapScreen),
