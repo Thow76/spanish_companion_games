@@ -1,14 +1,12 @@
-/// Home screen (Flow v2, B23): two choices, "New corrections" (phase 1)
-/// and "Recall" (phase 2), each with the number of questions in it (0 =
-/// dimmed, can't be opened), and a reload button in the top bar. Tapping a
-/// choice opens [PhaseGamesScreen], which lists that phase's games as the
-/// home screen used to; B24 replaces it with the set picker.
+/// Home screen: the six games in two groups by phase, "New corrections"
+/// (phase 1) and "Recall" (phase 2), one card per game with the number of
+/// questions available for it, and a reload button in the top bar.
 ///
-/// A filter card above the choices (B12) narrows the questions to one type
+/// A filter card above the groups (B12) narrows every game to one type
 /// (grammar errors or language notes), one phase, or one category, or any
-/// mix of the three; the counts follow it, and choosing a phase shows only
-/// that phase's choice. The filter is kept for the app session, including a
-/// reload. (B24 moves it to the set picker and drops its Phase row.)
+/// mix of the three; the card counts follow it, and choosing a phase shows
+/// only that phase's group. The filter is kept for the app session,
+/// including a reload.
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
@@ -20,10 +18,9 @@
 /// fails). When results are waiting to reach the Test Review sheet (B18),
 /// a line under the top bar says how many, with "Send again".
 ///
-/// Look: [HomeFrame] with [HomeTopBar]. The two choices are [GameCard]s
-/// standing in until U18 (phase 1 with the Choose a correction icon and
-/// accent, phase 2 with Fill the gap's), with the [PhaseHeading] copy as
-/// their descriptions; phone one column, laptop side by side.
+/// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
+/// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
+/// grid per group with 32 between the groups.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,6 +33,7 @@ import '../models/question_filter.dart';
 import '../models/question_parser.dart';
 import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
@@ -44,7 +42,6 @@ import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
-import 'phase_games_screen.dart';
 import 'repair_screen.dart';
 import 'spot_error_screen.dart';
 
@@ -137,19 +134,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Opens [phase]'s games (B23), with the questions that pass the filter.
-  void _openPhase(QuestionPhase phase, List<Question> questions) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => PhaseGamesScreen(
-          phase: phase,
-          questions: questions,
-          onGameSelected: _openGame,
-        ),
-      ),
-    );
-  }
-
   void _openGame(GameType game, List<Question> questions) {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -219,10 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onReload: _reload,
           resultsSync: widget.resultsSync,
-          onPhaseSelected: (phase) => _openPhase(
-            phase,
-            shown.where((q) => q.game.phase == phase).toList(),
-          ),
+          onGameSelected: (game) =>
+              _openGame(game, shown.where((q) => q.game == game).toList()),
         );
       },
     );
@@ -293,7 +275,7 @@ class _LoadedView extends StatelessWidget {
     required this.onFilterChanged,
     required this.sourceLine,
     required this.onReload,
-    required this.onPhaseSelected,
+    required this.onGameSelected,
     this.resultsSync,
   });
 
@@ -305,31 +287,14 @@ class _LoadedView extends StatelessWidget {
   final ValueChanged<QuestionFilter> onFilterChanged;
   final String sourceLine;
   final VoidCallback onReload;
-  final ValueChanged<QuestionPhase> onPhaseSelected;
+  final ValueChanged<GameType> onGameSelected;
   final ResultsSync? resultsSync;
-
-  /// The two choices' titles and descriptions (the [PhaseHeading] copy),
-  /// and the game whose icon and accent each card borrows until U18.
-  static const Map<QuestionPhase, (String, String, String)> choiceCopy = {
-    QuestionPhase.noticeAndCorrect: (
-      'New corrections',
-      'Your own mistakes, marked. Put them right.',
-      'choose_correction',
-    ),
-    QuestionPhase.recall: (
-      'Recall',
-      "Points you've corrected, in new sentences.",
-      'fill_gap',
-    ),
-  };
 
   @override
   Widget build(BuildContext context) {
-    final counts = <QuestionPhase, int>{
-      for (final p in QuestionPhase.values) p: 0,
-    };
+    final counts = <GameType, int>{for (final g in GameType.values) g: 0};
     for (final q in shown) {
-      counts[q.game.phase] = counts[q.game.phase]! + 1;
+      counts[q.game] = counts[q.game]! + 1;
     }
     final showNew =
         filter.phase == null || filter.phase == QuestionPhase.noticeAndCorrect;
@@ -338,18 +303,12 @@ class _LoadedView extends StatelessWidget {
     final type = AppTypography.of(context);
     final laptop = FormFactor.of(context) == FormFactor.laptop;
 
-    Widget choice(QuestionPhase phase) {
-      final (title, description, game) = choiceCopy[phase]!;
-      final count = counts[phase]!;
-      return GameCard(
-        key: ValueKey('phase-card-${phase.number}'),
-        game: game,
-        title: title,
-        description: description,
-        count: count,
-        onTap: count > 0 ? () => onPhaseSelected(phase) : null,
-      );
-    }
+    Widget group(QuestionPhase phase) => _GameGroup(
+      games: GameType.forPhase(phase),
+      counts: counts,
+      laptop: laptop,
+      onGameSelected: onGameSelected,
+    );
 
     return HomeFrame(
       topBar: HomeTopBar(source: sourceLine, onReload: onReload),
@@ -379,17 +338,84 @@ class _LoadedView extends StatelessWidget {
           const SizedBox(height: AppSpacing.s12),
           Text(_FilterCard.noMatchText, style: type.caption),
         ],
-        // The two choices (B23): phase 1, Andrew's own sentences with the
-        // mistake marked; phase 2, points already corrected, in new
-        // sentences.
-        SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
-        HomeCardGrid(
-          laptop: laptop,
-          cards: [
-            if (showNew) choice(QuestionPhase.noticeAndCorrect),
-            if (showRecall) choice(QuestionPhase.recall),
-          ],
+        if (showNew) ...[
+          // Phase 1: Andrew's own sentences with the mistake marked.
+          const PhaseHeading.newCorrections(),
+          group(QuestionPhase.noticeAndCorrect),
+        ],
+        // Laptop: 32 between the groups (the heading brings 24 of it).
+        if (laptop && showNew && showRecall)
+          const SizedBox(height: AppLayout.laptopGroupGap - AppSpacing.s24),
+        if (showRecall) ...[
+          // Phase 2: points already corrected, in new sentences.
+          const PhaseHeading.recall(),
+          group(QuestionPhase.recall),
+        ],
+      ],
+    );
+  }
+}
+
+/// The cards of one phase group, in home order: one column on phones, a
+/// 2-column grid on laptop (cards in a row share their height, so "Play →"
+/// lines up at the bottom).
+class _GameGroup extends StatelessWidget {
+  const _GameGroup({
+    required this.games,
+    required this.counts,
+    required this.laptop,
+    required this.onGameSelected,
+  });
+
+  final List<GameType> games;
+  final Map<GameType, int> counts;
+  final bool laptop;
+  final ValueChanged<GameType> onGameSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      for (final game in games)
+        GameCard.forGame(
+          key: ValueKey('game-card-${game.jsonValue}'),
+          game: game.jsonValue,
+          count: counts[game] ?? 0,
+          onTap: (counts[game] ?? 0) > 0 ? () => onGameSelected(game) : null,
         ),
+    ];
+
+    if (!laptop) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppLayout.phoneCardGap),
+            cards[i],
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < cards.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: AppLayout.laptopCardGap),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: cards[i]),
+                const SizedBox(width: AppLayout.laptopCardGap),
+                Expanded(
+                  child: i + 1 < cards.length
+                      ? cards[i + 1]
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

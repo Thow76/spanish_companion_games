@@ -8,7 +8,7 @@ import 'package:spanish_companion_games/models/question.dart';
 import 'package:spanish_companion_games/models/question_parser.dart';
 import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
-import 'package:spanish_companion_games/screens/phase_games_screen.dart';
+import 'package:spanish_companion_games/widgets/phase_heading.dart';
 
 Question _q(String id, GameType game, QuestionType type, String category) =>
     Question(
@@ -33,10 +33,9 @@ ParsedQuestions _sample() => ParsedQuestions(
 Widget _app(QuestionSource source) =>
     MaterialApp(home: HomeScreen(source: source));
 
-/// The number shown on a home choice's phone card (B23): 1 = New
-/// corrections, 2 = Recall.
-Finder _countOn(int phase, String text) => find.descendant(
-  of: find.byKey(ValueKey('phase-card-$phase')),
+/// The number shown on a game's phone card.
+Finder _countOn(GameType game, String text) => find.descendant(
+  of: find.byKey(ValueKey('game-card-${game.jsonValue}')),
   matching: find.text(text),
 );
 
@@ -59,8 +58,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Filter: All questions'), findsOneWidget);
-    expect(_countOn(1, '1'), findsOneWidget);
-    expect(_countOn(2, '3'), findsOneWidget);
+    expect(_countOn(GameType.fillGap, '2'), findsOneWidget);
+    expect(find.byType(PhaseHeading), findsNWidgets(2));
   });
 
   testWidgets('choosing a type narrows the counts', (tester) async {
@@ -72,29 +71,30 @@ void main() {
 
     expect(find.text('Filter: Language notes'), findsOneWidget);
     expect(find.text('1 of 4 questions'), findsOneWidget);
-    expect(_countOn(2, '1'), findsOneWidget);
-    // The only phase 1 question (repair) is grammar.
-    final newCard = find.byKey(const ValueKey('phase-card-1'));
+    expect(_countOn(GameType.fillGap, '1'), findsOneWidget);
+    // Repair and Sentence ordering have only grammar questions here.
+    final repair = find.byKey(const ValueKey('game-card-repair'));
     expect(
-      find.descendant(of: newCard, matching: find.text('No questions yet')),
+      find.descendant(of: repair, matching: find.text('No questions yet')),
       findsOneWidget,
     );
 
     // "All" puts it back.
     await _tapVisible(tester, _chip('Type', 'All'));
     expect(find.text('Filter: All questions'), findsOneWidget);
-    expect(_countOn(2, '3'), findsOneWidget);
+    expect(_countOn(GameType.fillGap, '2'), findsOneWidget);
   });
 
-  testWidgets('choosing a phase shows only that choice', (tester) async {
+  testWidgets('choosing a phase shows only that group', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
     await _openFilter(tester);
     await _tapVisible(tester, _chip('Phase', 'Recall'));
 
-    expect(find.byKey(const ValueKey('phase-card-1')), findsNothing);
-    expect(find.byKey(const ValueKey('phase-card-2')), findsOneWidget);
+    expect(find.byType(PhaseHeading), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-card-repair')), findsNothing);
+    expect(find.byKey(const ValueKey('game-card-fill_gap')), findsOneWidget);
   });
 
   testWidgets('a game opens with only the questions that pass', (tester) async {
@@ -105,10 +105,6 @@ void main() {
     await _tapVisible(tester, _chip('Category', 'Prepositions'));
     expect(find.text('Filter: Prepositions'), findsOneWidget);
 
-    await _tapVisible(tester, find.byKey(const ValueKey('phase-card-2')));
-    final phase =
-        tester.widget<PhaseGamesScreen>(find.byType(PhaseGamesScreen));
-    expect([for (final q in phase.questions) q.id], ['a']);
     await _tapVisible(tester, find.text(GameType.fillGap.label));
     final screen = tester.widget<FillGapScreen>(find.byType(FillGapScreen));
     expect([for (final q in screen.questions) q.id], ['a']);
