@@ -22,20 +22,10 @@ class FeedbackPanel extends StatelessWidget {
     super.key,
     required this.correct,
     required this.content,
-    this.heading,
-    this.note,
   });
 
   final bool correct;
   final ExplanationContent content;
-
-  /// Replaces "Correct" / "Not quite" in the heading (U18: Repair's
-  /// "Right with a hint").
-  final String? heading;
-
-  /// A caption line under the heading (U18: "It counts as not passed yet,
-  /// so it will come back.").
-  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -67,20 +57,13 @@ class FeedbackPanel extends StatelessWidget {
                 const SizedBox(width: AppSpacing.s12),
                 Expanded(
                   child: Text(
-                    heading ??
-                        (correct
-                            ? ResultToast.correctText
-                            : ResultToast.wrongText),
+                    correct ? ResultToast.correctText : ResultToast.wrongText,
                     style: type.feedbackHeading.copyWith(color: colour),
                   ),
                 ),
               ],
             ),
           ),
-          if (note != null) ...[
-            const SizedBox(height: AppSpacing.s8),
-            Text(note!, style: type.caption),
-          ],
           const SizedBox(height: AppSpacing.s16),
           ExplanationBody(content: content),
         ],
@@ -102,11 +85,6 @@ enum QuestionMark {
 
   /// Still to come: hollow muted dot.
   upcoming,
-
-  /// Right on the second try, after a hint (U18, Repair): a lightbulb in
-  /// `textMuted`. Counts as answered but not as correct, as it is recorded
-  /// as not passed.
-  hinted,
 }
 
 /// SessionPanel (laptop only): "This session" and the score (from the first
@@ -139,12 +117,7 @@ class SessionPanel extends StatelessWidget {
 
   int get _score => marks.where((m) => m == QuestionMark.correct).length;
   int get _answered => marks
-      .where(
-        (m) =>
-            m == QuestionMark.correct ||
-            m == QuestionMark.wrong ||
-            m == QuestionMark.hinted,
-      )
+      .where((m) => m == QuestionMark.correct || m == QuestionMark.wrong)
       .length;
 
   @override
@@ -222,7 +195,6 @@ class SessionPanel extends StatelessWidget {
       QuestionMark.wrong => '$label, wrong',
       QuestionMark.current => '$label, now',
       QuestionMark.upcoming => '$label, to come',
-      QuestionMark.hinted => '$label, right with a hint',
     };
     return Semantics(
       label: spoken,
@@ -260,11 +232,6 @@ class SessionPanel extends StatelessWidget {
         color: AppColors.accent,
         shape: BoxShape.circle,
       ),
-    ),
-    QuestionMark.hinted => const Icon(
-      Icons.lightbulb_outline_rounded,
-      color: AppColors.textMuted,
-      size: AppSizes.iconSmall,
     ),
     QuestionMark.upcoming => Container(
       width: AppSizes.sessionDot,
