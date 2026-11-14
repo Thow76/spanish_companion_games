@@ -27,16 +27,10 @@ class GameCard extends StatelessWidget {
     required this.description,
     required this.count,
     required this.onTap,
-    this.icon,
   });
 
   /// The `game` value, e.g. `choose_correction`. Picks the accent and icon.
   final String game;
-
-  /// A Material icon to show in the tile instead of [game]'s own icon
-  /// (U18: the home screen's two phase cards). The accent still comes from
-  /// [game].
-  final IconData? icon;
   final String title;
   final String description;
 
@@ -124,11 +118,9 @@ class _IconTile extends StatelessWidget {
     required this.accent,
     required this.size,
     required this.enabled,
-    this.icon,
   });
 
   final String game;
-  final IconData? icon;
   final Color accent;
   final double size;
   final bool enabled;
@@ -146,9 +138,7 @@ class _IconTile extends StatelessWidget {
           color: enabled ? AppColors.gameTileStroke(accent) : AppColors.stroke,
         ),
       ),
-      child: icon == null
-          ? GameIcon(game: game, color: accent)
-          : Icon(icon, size: AppSizes.glyph, color: accent),
+      child: GameIcon(game: game, color: accent),
     );
   }
 }
@@ -176,7 +166,6 @@ class _PhoneContent extends StatelessWidget {
     final description = Text(card.description, style: type.cardDescription);
     final tile = _IconTile(
       game: card.game,
-      icon: card.icon,
       accent: accent,
       size: AppSizes.gameTilePhone,
       enabled: hasQuestions,
@@ -302,7 +291,6 @@ class _LaptopContent extends StatelessWidget {
                   children: [
                     _IconTile(
                       game: card.game,
-                      icon: card.icon,
                       accent: accent,
                       size: AppSizes.gameTileLaptop,
                       enabled: hasQuestions,

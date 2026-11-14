@@ -1,12 +1,12 @@
-/// Screenshots of the set picker (B24) at the three sizes, on the sample
-/// questions. A stand-in look until U18.
+/// Screenshots of the home screen filter (B12) at the three sizes, on the
+/// sample questions.
 ///
-/// - `set-picker_recall_<size>`: "Recall" tapped on home: sets of 5,
-///   oldest first, "By conversation" off.
-/// - `set-picker_by-conversation_<size>`: "Recall" with "By conversation"
-///   on: one set per conversation, with its date.
-/// - `set-picker_new-filter_<size>`: "New corrections" with the filter
-///   opened (Type and Category, no Phase row).
+/// - `home-filter_open_<size>`: the filter card opened, "Grammar errors"
+///   chosen, so the card reads "Filter: Grammar errors" over "12 of 15
+///   questions" (or whatever the sample gives) and the three rows of
+///   choices show.
+/// - `home-filter_recall_<size>`: "Recall" chosen and the card shut again:
+///   only the Recall group shows, its counts narrowed.
 @Tags(['golden'])
 library;
 
@@ -40,51 +40,46 @@ void main() {
 
   /// Back to the top of the page, so the top bar is in the picture.
   Future<void> scrollToTop(WidgetTester tester) async {
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, 3000));
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 3000));
     await settle(tester);
   }
 
-  Future<void> openPhase(
-    WidgetTester tester,
-    ScreenSize size,
-    int phase,
-  ) async {
+  Future<void> start(WidgetTester tester, ScreenSize size) async {
     setScreenSize(tester, size);
     await tester.pumpWidget(
       _App(child: HomeScreen(source: () async => sample)),
     );
     await settle(tester);
-    await tapVisible(tester, find.byKey(ValueKey('phase-card-$phase')));
   }
 
   for (final size in ScreenSize.values) {
-    testWidgets('set picker, recall, ${size.name}', (tester) async {
-      await openPhase(tester, size, 2);
-      await expectLater(
-        find.byType(_App),
-        matchesGoldenFile(goldenName('set-picker', 'recall', size)),
+    testWidgets('home filter, open, ${size.name}', (tester) async {
+      await start(tester, size);
+      await tapVisible(tester, find.textContaining('Filter: '));
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('filter-Type-Grammar errors')),
       );
-    });
-
-    testWidgets('set picker, by conversation, ${size.name}', (tester) async {
-      await openPhase(tester, size, 2);
-      await tapVisible(tester, find.byKey(const ValueKey('set-by-conversation')));
       await scrollToTop(tester);
       await expectLater(
         find.byType(_App),
-        matchesGoldenFile(goldenName('set-picker', 'by-conversation', size)),
+        matchesGoldenFile(goldenName('home-filter', 'open', size)),
       );
     });
 
-    testWidgets('set picker, new corrections filter, ${size.name}', (
-      tester,
-    ) async {
-      await openPhase(tester, size, 1);
+    testWidgets('home filter, recall only, ${size.name}', (tester) async {
+      await start(tester, size);
+      await tapVisible(tester, find.textContaining('Filter: '));
+      await tapVisible(
+        tester,
+        find.byKey(const ValueKey('filter-Phase-Recall')),
+      );
+      // Shut the card again.
       await tapVisible(tester, find.textContaining('Filter: '));
       await scrollToTop(tester);
       await expectLater(
         find.byType(_App),
-        matchesGoldenFile(goldenName('set-picker', 'new-filter', size)),
+        matchesGoldenFile(goldenName('home-filter', 'recall', size)),
       );
     });
   }

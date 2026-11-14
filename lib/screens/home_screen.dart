@@ -1,15 +1,12 @@
-/// Home screen (Flow v2, B23): two choices, "New corrections" (phase 1)
-/// and "Recall" (phase 2), each with the number of questions in it (0 =
-/// dimmed, can't be opened), and a reload button in the top bar. Tapping a
-/// choice opens the set picker for that phase ([SetPickerScreen], B24):
-/// set size, "by conversation", the filter and the list of sets. Until
-/// B25's player, tapping a set opens the game of its first question with
-/// the set's questions for that game.
+/// Home screen: the six games in two groups by phase, "New corrections"
+/// (phase 1) and "Recall" (phase 2), one card per game with the number of
+/// questions available for it, and a reload button in the top bar.
 ///
-/// The filter (B12, type and category) is on the set picker only (U18):
-/// home counts every question, so a phase never looks empty because of a
-/// filter chosen elsewhere. The filter and the picker's choices are kept
-/// for the app session, including a reload.
+/// A filter card above the groups (B12) narrows every game to one type
+/// (grammar errors or language notes), one phase, or one category, or any
+/// mix of the three; the card counts follow it, and choosing a phase shows
+/// only that phase's group. The filter is kept for the app session,
+/// including a reload.
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
@@ -21,11 +18,9 @@
 /// fails). When results are waiting to reach the Test Review sheet (B18),
 /// a line under the top bar says how many, with "Send again".
 ///
-/// Look (U18, proposed for the spec): [HomeFrame] with [HomeTopBar]. The two
-/// choices are [GameCard]s with their own icons (an edit-note icon for New
-/// corrections, a replay icon for Recall) in the accents of their first
-/// games (pink, cyan), with the [PhaseHeading] copy as their descriptions;
-/// phone one column, laptop side by side.
+/// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
+/// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
+/// grid per group with 32 between the groups.
 library;
 
 import 'package:flutter/material.dart';
@@ -34,10 +29,11 @@ import '../data/drive_source.dart';
 import '../data/question_loader.dart';
 import '../data/results_sync.dart';
 import '../models/question.dart';
+import '../models/question_filter.dart';
 import '../models/question_parser.dart';
-import '../models/question_sets.dart';
 import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_layout.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
@@ -46,9 +42,7 @@ import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
-import 'home_card_grid.dart';
 import 'repair_screen.dart';
-import 'set_picker_screen.dart';
 import 'spot_error_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -99,9 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
   /// (B7). Kept when the questions are reloaded.
   late final SessionTally _session = SessionTally(sync: widget.resultsSync);
 
-  /// What to play (B12) and the set picker's size and "by conversation"
-  /// (B24). Kept when the questions are reloaded.
-  SetChoices _choices = const SetChoices();
+  /// What to play (B12). Kept when the questions are reloaded.
+  QuestionFilter _filter = QuestionFilter.all;
 
   /// When the question file was last changed (B20), once known.
   DateTime? _updatedAt;
@@ -139,36 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // Any failure: the source line just has no time.
       onError: (Object _) {},
     );
-  }
-
-  /// Opens [phase]'s set picker (B24) with every question of that phase;
-  /// the picker applies the filter's type and category itself.
-  void _openPhase(QuestionPhase phase, List<Question> questions) {
-    // A category the reloaded file no longer has is dropped, so the picker
-    // never starts empty for a reason that can't be seen.
-    _choices = _choices.copyWith(
-      filter: _choices.filter.keepingCategoryIn(questions),
-    );
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => SetPickerScreen(
-          phase: phase,
-          questions: questions.where((q) => q.game.phase == phase).toList(),
-          choices: _choices,
-          onChoicesChanged: (c) => setState(() => _choices = c),
-          onSetSelected: _openSet,
-        ),
-      ),
-    );
-  }
-
-  /// A set was tapped (B24). Until B25's player plays a whole set across
-  /// games, this opens the game of the set's first question with the set's
-  /// questions for that game.
-  void _openSet(QuestionSet set) {
-    if (set.questions.isEmpty) return;
-    final game = set.questions.first.game;
-    _openGame(game, set.questions.where((q) => q.game == game).toList());
   }
 
   void _openGame(GameType game, List<Question> questions) {
@@ -224,8 +187,15 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
         final parsed = snapshot.data!;
+        // A category the new file no longer has is dropped, so a reload
+        // never leaves every game empty for a reason that can't be seen.
+        final filter = _filter.keepingCategoryIn(parsed.questions);
+        final shown = filter.apply(parsed.questions);
         return _LoadedView(
           parsed: parsed,
+          shown: shown,
+          filter: filter,
+          onFilterChanged: (f) => setState(() => _filter = f),
           sourceLine: sourceLineText(
             parsed.questions.length,
             widget.sourceName,
@@ -233,7 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onReload: _reload,
           resultsSync: widget.resultsSync,
-          onPhaseSelected: (phase) => _openPhase(phase, parsed.questions),
+          onGameSelected: (game) =>
+              _openGame(game, shown.where((q) => q.game == game).toList()),
         );
       },
     );
@@ -299,60 +270,45 @@ String? _webAddress() {
 class _LoadedView extends StatelessWidget {
   const _LoadedView({
     required this.parsed,
+    required this.shown,
+    required this.filter,
+    required this.onFilterChanged,
     required this.sourceLine,
     required this.onReload,
-    required this.onPhaseSelected,
+    required this.onGameSelected,
     this.resultsSync,
   });
 
   final ParsedQuestions parsed;
+
+  /// The questions that pass [filter], in file order.
+  final List<Question> shown;
+  final QuestionFilter filter;
+  final ValueChanged<QuestionFilter> onFilterChanged;
   final String sourceLine;
   final VoidCallback onReload;
-  final ValueChanged<QuestionPhase> onPhaseSelected;
+  final ValueChanged<GameType> onGameSelected;
   final ResultsSync? resultsSync;
-
-  /// The two choices' titles and descriptions (the [PhaseHeading] copy)
-  /// and their icons (U18, proposed for the spec). The accent comes from
-  /// [SetPickerScreen.accentGame].
-  static const Map<QuestionPhase, (String, String, IconData)> choiceCopy = {
-    QuestionPhase.noticeAndCorrect: (
-      'New corrections',
-      'Your own mistakes, marked. Put them right.',
-      Icons.edit_note_rounded,
-    ),
-    QuestionPhase.recall: (
-      'Recall',
-      "Points you've corrected, in new sentences.",
-      Icons.replay_rounded,
-    ),
-  };
 
   @override
   Widget build(BuildContext context) {
-    // Every question counts here (U18): the filter lives on the set
-    // picker, so a phase can never look empty because of a filter that
-    // can't be seen or undone from home.
-    final counts = <QuestionPhase, int>{
-      for (final p in QuestionPhase.values) p: 0,
-    };
-    for (final q in parsed.questions) {
-      counts[q.game.phase] = counts[q.game.phase]! + 1;
+    final counts = <GameType, int>{for (final g in GameType.values) g: 0};
+    for (final q in shown) {
+      counts[q.game] = counts[q.game]! + 1;
     }
+    final showNew =
+        filter.phase == null || filter.phase == QuestionPhase.noticeAndCorrect;
+    final showRecall =
+        filter.phase == null || filter.phase == QuestionPhase.recall;
+    final type = AppTypography.of(context);
     final laptop = FormFactor.of(context) == FormFactor.laptop;
 
-    Widget choice(QuestionPhase phase) {
-      final (title, description, icon) = choiceCopy[phase]!;
-      final count = counts[phase]!;
-      return GameCard(
-        key: ValueKey('phase-card-${phase.number}'),
-        game: SetPickerScreen.accentGame(phase),
-        icon: icon,
-        title: title,
-        description: description,
-        count: count,
-        onTap: count > 0 ? () => onPhaseSelected(phase) : null,
-      );
-    }
+    Widget group(QuestionPhase phase) => _GameGroup(
+      games: GameType.forPhase(phase),
+      counts: counts,
+      laptop: laptop,
+      onGameSelected: onGameSelected,
+    );
 
     return HomeFrame(
       topBar: HomeTopBar(source: sourceLine, onReload: onReload),
@@ -364,22 +320,236 @@ class _LoadedView extends StatelessWidget {
           SizedBox(height: laptop ? AppSpacing.s24 : AppSpacing.s16),
           _ProblemsNotice(problems: parsed.problems),
         ],
-        // The two choices (B23): phase 1, Andrew's own sentences with the
-        // mistake marked; phase 2, points already corrected, in new
-        // sentences.
+        // What to play (B12).
         SizedBox(
           height: parsed.hasProblems
               ? AppSpacing.s12
               : (laptop ? AppSpacing.s24 : AppSpacing.s16),
         ),
-        HomeCardGrid(
-          laptop: laptop,
-          cards: [
-            choice(QuestionPhase.noticeAndCorrect),
-            choice(QuestionPhase.recall),
+        _FilterCard(
+          key: const ValueKey('home-filter'),
+          filter: filter,
+          categories: QuestionFilter.categoriesOf(parsed.questions),
+          shownCount: shown.length,
+          totalCount: parsed.questions.length,
+          onChanged: onFilterChanged,
+        ),
+        if (shown.isEmpty && parsed.questions.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.s12),
+          Text(_FilterCard.noMatchText, style: type.caption),
+        ],
+        if (showNew) ...[
+          // Phase 1: Andrew's own sentences with the mistake marked.
+          const PhaseHeading.newCorrections(),
+          group(QuestionPhase.noticeAndCorrect),
+        ],
+        // Laptop: 32 between the groups (the heading brings 24 of it).
+        if (laptop && showNew && showRecall)
+          const SizedBox(height: AppLayout.laptopGroupGap - AppSpacing.s24),
+        if (showRecall) ...[
+          // Phase 2: points already corrected, in new sentences.
+          const PhaseHeading.recall(),
+          group(QuestionPhase.recall),
+        ],
+      ],
+    );
+  }
+}
+
+/// The cards of one phase group, in home order: one column on phones, a
+/// 2-column grid on laptop (cards in a row share their height, so "Play →"
+/// lines up at the bottom).
+class _GameGroup extends StatelessWidget {
+  const _GameGroup({
+    required this.games,
+    required this.counts,
+    required this.laptop,
+    required this.onGameSelected,
+  });
+
+  final List<GameType> games;
+  final Map<GameType, int> counts;
+  final bool laptop;
+  final ValueChanged<GameType> onGameSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      for (final game in games)
+        GameCard.forGame(
+          key: ValueKey('game-card-${game.jsonValue}'),
+          game: game.jsonValue,
+          count: counts[game] ?? 0,
+          onTap: (counts[game] ?? 0) > 0 ? () => onGameSelected(game) : null,
+        ),
+    ];
+
+    if (!laptop) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppLayout.phoneCardGap),
+            cards[i],
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < cards.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: AppLayout.laptopCardGap),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: cards[i]),
+                const SizedBox(width: AppLayout.laptopCardGap),
+                Expanded(
+                  child: i + 1 < cards.length
+                      ? cards[i + 1]
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The filter (B12): a quiet card like the skipped-questions notice. Shut,
+/// it reads "Filter: All questions" (or what is chosen, with "5 of 15
+/// questions" under it); open, it shows three rows of choices, Type, Phase
+/// and Category, each starting with "All". The chosen one in each row is
+/// highlighted.
+///
+/// The spec has no filter control; the choices use WordChip (the closest
+/// shared widget: a tappable chip with a highlighted state).
+class _FilterCard extends StatelessWidget {
+  const _FilterCard({
+    super.key,
+    required this.filter,
+    required this.categories,
+    required this.shownCount,
+    required this.totalCount,
+    required this.onChanged,
+  });
+
+  final QuestionFilter filter;
+  final List<String> categories;
+  final int shownCount;
+  final int totalCount;
+  final ValueChanged<QuestionFilter> onChanged;
+
+  static const String allLabel = 'All';
+  static const String noMatchText =
+      'No questions match this filter. Choose "All" in a row to widen it.';
+
+  static String countText(int shown, int total) =>
+      '$shown of ${total == 1 ? '1 question' : '$total questions'}';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+
+    Widget row<T>(
+      String label,
+      List<T> values,
+      String Function(T) labelOf,
+      T? chosen,
+      bool Function(T, T) same,
+      QuestionFilter Function(T?) change,
+    ) {
+      Widget chip(String text, bool selected, T? value) => WordChip(
+        key: ValueKey('filter-$label-$text'),
+        label: text,
+        state: selected ? WordChipState.placed : WordChipState.toPlace,
+        onPressed: selected ? null : () => onChanged(change(value)),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(header: true, child: Text(label, style: type.caption)),
+            const SizedBox(height: AppSpacing.s8),
+            Wrap(
+              spacing: AppSpacing.s8,
+              runSpacing: AppSpacing.s8,
+              children: [
+                chip(allLabel, chosen == null, null),
+                for (final v in values)
+                  chip(labelOf(v), chosen != null && same(v, chosen), v),
+              ],
+            ),
           ],
         ),
-      ],
+      );
+    }
+
+    return Material(
+      color: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppRadius.cardAll,
+        side: BorderSide(color: AppColors.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: AppColors.textMuted,
+        collapsedIconColor: AppColors.textMuted,
+        leading: Icon(
+          Icons.filter_list_rounded,
+          size: AppSizes.iconSmall,
+          color: filter.isAll ? AppColors.textMuted : AppColors.accent,
+        ),
+        title: Text(
+          'Filter: ${filter.summary}',
+          style: type.caption.copyWith(color: AppColors.textSecondary),
+        ),
+        subtitle: filter.isAll
+            ? null
+            : Text(countText(shownCount, totalCount), style: type.caption),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.s16,
+          0,
+          AppSpacing.s16,
+          AppSpacing.s16,
+        ),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row<QuestionType>(
+            'Type',
+            QuestionType.values,
+            QuestionFilter.typeLabel,
+            filter.type,
+            (a, b) => a == b,
+            filter.withType,
+          ),
+          row<QuestionPhase>(
+            'Phase',
+            QuestionPhase.values,
+            (p) => p.label,
+            filter.phase,
+            (a, b) => a == b,
+            filter.withPhase,
+          ),
+          if (categories.isNotEmpty)
+            row<String>(
+              'Category',
+              categories,
+              (c) => c,
+              filter.category,
+              (a, b) => a.trim().toLowerCase() == b.trim().toLowerCase(),
+              filter.withCategory,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -503,9 +673,8 @@ class _ErrorView extends StatelessWidget {
 /// Under the top bar (B20): "2 results not saved yet" and a "Send again"
 /// button while results wait to reach the Test Review sheet (B18), using
 /// [ResultsSync.send]; "Saving 2 results…" while a send is on its way.
-/// Nothing at all when every result is saved. Muted caption with "Send
-/// again" as a caption-sized accent link (U18), as the spec has no copy
-/// for it.
+/// Nothing at all when every result is saved. Muted caption, as the spec
+/// has no copy for it.
 class UnsavedResultsLine extends StatelessWidget {
   const UnsavedResultsLine({super.key, required this.sync});
 
@@ -543,23 +712,9 @@ class UnsavedResultsLine extends StatelessWidget {
                   sending ? savingText(count) : '${unsavedText(count)} ·',
                   style: type.caption,
                 ),
-                // U18: the same size as the caption beside it, in accent
-                // weight 600, still a 44-high tap target.
                 if (!sending)
                   TextButton(
                     onPressed: sync.send,
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.accent,
-                      textStyle: type.caption.withWeight(600),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s8,
-                      ),
-                      minimumSize: const Size(
-                        AppSizes.minTarget,
-                        AppSizes.minTarget,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.padded,
-                    ),
                     child: const Text(retryLabel),
                   ),
               ],

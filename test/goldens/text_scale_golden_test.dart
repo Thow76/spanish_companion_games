@@ -4,8 +4,6 @@
 /// - `home_text-200_<size>` and `home_text-200-320_phone`: the home screen.
 /// - `home_text-200-full_phone`: the same on a very tall phone window, so
 ///   every game card shows.
-/// - `set-picker_text-200_<size>`, `-320_phone` and `-full_phone`: the
-///   Recall set picker with "By conversation" on (U18).
 /// - `<game>_text-200_<size>` and `<game>_text-200-320_phone`: each game's
 ///   first question, before answering.
 /// - `choose-correction_text-200-checked-wrong_<size>`,
@@ -22,8 +20,6 @@
 /// 320 is 320×640 and full is 390×2000.
 @Tags(['golden'])
 library;
-
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,9 +67,8 @@ Widget _game(GameType game, List<Question> questions) => switch (game) {
   GameType.chooseCorrection => ChooseCorrectionScreen(questions: questions),
   GameType.repair => RepairScreen(questions: questions),
   GameType.fillGap => FillGapScreen(questions: questions),
-  // Seeded (U18), so these screenshots stop changing on every run.
-  GameType.match => MatchScreen(questions: questions, random: Random(3)),
-  GameType.order => OrderScreen(questions: questions, random: Random(3)),
+  GameType.match => MatchScreen(questions: questions),
+  GameType.order => OrderScreen(questions: questions),
   GameType.spotError => SpotErrorScreen(questions: questions),
 };
 
@@ -109,31 +104,6 @@ void main() {
       await settle(tester);
       expect(tester.takeException(), isNull);
       await shoot(tester, _file('home', 'text-200', shot));
-    });
-  }
-
-  // U18: the set picker at 200%, "Recall" with "By conversation" on.
-  for (final shot in [..._shots, _full]) {
-    testWidgets('set picker, 200%, ${shot.size}${shot.suffix}', (tester) async {
-      setUp200(tester, shot);
-      await tester.pumpWidget(
-        _App(child: HomeScreen(source: () async => sample)),
-      );
-      await settle(tester);
-      final recall = find.byKey(const ValueKey('phase-card-2'));
-      await tester.ensureVisible(recall);
-      await settle(tester);
-      await tester.tap(recall);
-      await settle(tester);
-      final toggle = find.byKey(const ValueKey('set-by-conversation'));
-      await tester.ensureVisible(toggle);
-      await settle(tester);
-      await tester.tap(toggle);
-      await settle(tester);
-      await tester.drag(find.byType(Scrollable).last, const Offset(0, 3000));
-      await settle(tester);
-      expect(tester.takeException(), isNull);
-      await shoot(tester, _file('set-picker', 'text-200', shot));
     });
   }
 
