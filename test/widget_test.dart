@@ -8,8 +8,8 @@ import 'package:spanish_companion_games/screens/fill_gap_screen.dart';
 import 'package:spanish_companion_games/screens/home_screen.dart';
 import 'package:spanish_companion_games/screens/match_screen.dart';
 import 'package:spanish_companion_games/screens/order_screen.dart';
+import 'package:spanish_companion_games/screens/phase_games_screen.dart';
 import 'package:spanish_companion_games/screens/repair_screen.dart';
-import 'package:spanish_companion_games/screens/set_picker_screen.dart';
 import 'package:spanish_companion_games/screens/spot_error_screen.dart';
 import 'package:spanish_companion_games/widgets/game_card.dart';
 
@@ -42,15 +42,6 @@ Future<void> _openPhase(WidgetTester tester, String title) async {
   await tester.ensureVisible(find.text(title));
   await tester.pumpAndSettle();
   await tester.tap(find.text(title));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
-  await tester.ensureVisible(finder);
-  // ensureVisible only moves the scroll position; pump so the tap uses the
-  // new layout, not the old (off-screen) one.
-  await tester.pumpAndSettle();
-  await tester.tap(finder);
   await tester.pumpAndSettle();
 }
 
@@ -102,86 +93,64 @@ void main() {
     );
     await tester.tap(newCard);
     await tester.pumpAndSettle();
-    expect(find.byType(SetPickerScreen), findsNothing);
+    expect(find.byType(PhaseGamesScreen), findsNothing);
   });
 
-  testWidgets('Recall opens its set picker with that phase only',
-      (tester) async {
+  testWidgets('Recall lists its four games, with counts', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
     await _openPhase(tester, 'Recall');
 
     final screen =
-        tester.widget<SetPickerScreen>(find.byType(SetPickerScreen));
+        tester.widget<PhaseGamesScreen>(find.byType(PhaseGamesScreen));
     expect(screen.phase, QuestionPhase.recall);
     expect([for (final q in screen.questions) q.id], ['a', 'b', 'c']);
-    // The three recall questions have no source or date: one set of 3.
-    expect(find.text('1 set'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('set-card-0')),
-        matching: find.text('3'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('set-card-1')), findsNothing);
+    for (final game in GameType.forPhase(QuestionPhase.recall)) {
+      expect(find.text(game.label), findsOneWidget);
+    }
+    expect(find.text(GameType.repair.label), findsNothing);
+    Finder countOn(GameType game, String text) => find.descendant(
+          of: find.byKey(ValueKey('game-card-${game.jsonValue}')),
+          matching: find.text(text),
+        );
+    expect(countOn(GameType.fillGap, '2'), findsOneWidget);
+    expect(countOn(GameType.order, '1'), findsOneWidget);
+    // Matching and Spot the error have none.
+    expect(find.text('No questions yet'), findsNWidgets(2));
+    final matchCard = find.byKey(const ValueKey('game-card-match'));
+    expect(tester.widget<GameCard>(matchCard).onTap, isNull);
   });
 
   testWidgets('back from a phase returns home', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
     await _openPhase(tester, 'New corrections');
-    expect(find.byType(SetPickerScreen), findsOneWidget);
+    expect(find.text(GameType.chooseCorrection.label), findsOneWidget);
 
-    await _tapVisible(tester, find.byTooltip(SetPickerScreen.backLabel));
-    expect(find.byType(SetPickerScreen), findsNothing);
+    await tester.tap(find.byTooltip(PhaseGamesScreen.backLabel));
+    await tester.pumpAndSettle();
+    expect(find.byType(PhaseGamesScreen), findsNothing);
     expect(find.byKey(const ValueKey('phase-card-1')), findsOneWidget);
   });
 
-  testWidgets('the set size and by conversation are kept', (tester) async {
+  testWidgets('Sentence ordering opens its game screen', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
+
     await _openPhase(tester, 'Recall');
-
-    await _tapVisible(tester, find.byKey(const ValueKey('set-size-10')));
-    await _tapVisible(
-      tester,
-      find.byKey(const ValueKey('set-by-conversation')),
-    );
-    await _tapVisible(tester, find.byTooltip(SetPickerScreen.backLabel));
-
-    await _openPhase(tester, 'New corrections');
-    final screen =
-        tester.widget<SetPickerScreen>(find.byType(SetPickerScreen));
-    expect(screen.choices.size, 10);
-    expect(screen.choices.byConversation, isTrue);
+    await tester.ensureVisible(find.text(GameType.order.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.order.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(OrderScreen), findsOneWidget);
   });
 
-  // Until B25, a set opens the game of its first question.
-  for (final (game, phase, type) in [
-    (GameType.order, 'Recall', OrderScreen),
-    (GameType.fillGap, 'Recall', FillGapScreen),
-    (GameType.repair, 'New corrections', RepairScreen),
-  ]) {
-    testWidgets('a set starting with ${game.label} opens it', (tester) async {
-      await tester.pumpWidget(
-        _app(
-          () async => ParsedQuestions(
-            questions: [_q('x', game), ..._sample().questions],
-            problems: const [],
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await _openPhase(tester, phase);
-      await _tapVisible(tester, find.byKey(const ValueKey('set-card-0')));
-      expect(find.byType(type), findsOneWidget);
-    });
-  }
-
-  testWidgets('a set starting with Matching opens it', (tester) async {
+  testWidgets('Matching opens its game screen', (tester) async {
     final withMatch = ParsedQuestions(
       questions: [
+        ..._sample().questions,
         Question(
           id: 'm',
           game: GameType.match,
@@ -190,7 +159,6 @@ void main() {
           prompt: 'Match the verb to its preposition',
           pairs: const [MatchPair('pensar', 'en'), MatchPair('depender', 'de')],
         ),
-        ..._sample().questions,
       ],
       problems: const [],
     );
@@ -198,15 +166,47 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openPhase(tester, 'Recall');
-    await _tapVisible(tester, find.byKey(const ValueKey('set-card-0')));
-    final screen = tester.widget<MatchScreen>(find.byType(MatchScreen));
-    // Only the set's questions of that game.
-    expect([for (final q in screen.questions) q.id], ['m']);
+    await tester.ensureVisible(find.text(GameType.match.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.match.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(MatchScreen), findsOneWidget);
   });
 
-  testWidgets('a set starting with Spot the error opens it', (tester) async {
+  testWidgets('Fill the gap opens its game screen', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await _openPhase(tester, 'Recall');
+    await tester.ensureVisible(find.text(GameType.fillGap.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.fillGap.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(FillGapScreen), findsOneWidget);
+  });
+
+  testWidgets('Repair opens its game screen', (tester) async {
+    await tester.pumpWidget(_app(() async => _sample()));
+    await tester.pumpAndSettle();
+
+    await _openPhase(tester, 'New corrections');
+    await tester.ensureVisible(find.text(GameType.repair.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.repair.label));
+    await tester.pumpAndSettle();
+    expect(find.byType(RepairScreen), findsOneWidget);
+  });
+
+  testWidgets('Spot the error opens its game screen', (tester) async {
     final withSpotError = ParsedQuestions(
       questions: [
+        ..._sample().questions,
         Question(
           id: 's',
           game: GameType.spotError,
@@ -215,7 +215,6 @@ void main() {
           prompt: 'Depende del tiempo.',
           answers: const ['Depende del tiempo.'],
         ),
-        ..._sample().questions,
       ],
       problems: const [],
     );
@@ -223,7 +222,12 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openPhase(tester, 'Recall');
-    await _tapVisible(tester, find.byKey(const ValueKey('set-card-0')));
+    await tester.ensureVisible(find.text(GameType.spotError.label));
+    // ensureVisible only moves the scroll position; pump so the tap
+    // uses the new layout, not the old (off-screen) one.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GameType.spotError.label));
+    await tester.pumpAndSettle();
     expect(find.byType(SpotErrorScreen), findsOneWidget);
   });
 

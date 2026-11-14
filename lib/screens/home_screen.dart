@@ -1,19 +1,14 @@
 /// Home screen (Flow v2, B23): two choices, "New corrections" (phase 1)
 /// and "Recall" (phase 2), each with the number of questions in it (0 =
 /// dimmed, can't be opened), and a reload button in the top bar. Tapping a
-/// choice opens the set picker for that phase ([SetPickerScreen], B24):
-/// set size, "by conversation", the filter and the list of sets. Until
-/// B25's player, tapping a set opens the game of its first question with
-/// the set's questions for that game.
+/// choice opens [PhaseGamesScreen], which lists that phase's games as the
+/// home screen used to; B24 replaces it with the set picker.
 ///
 /// A filter card above the choices (B12) narrows the questions to one type
 /// (grammar errors or language notes), one phase, or one category, or any
 /// mix of the three; the counts follow it, and choosing a phase shows only
-/// that phase's choice. The set picker shows the same filter without its
-/// Phase row, so a type or category chosen there shows here too. The
-/// filter and the picker's choices are kept for the app session, including
-/// a reload. (The card stays on home for now because an existing
-/// screenshot test drives it there; see B24's notes.)
+/// that phase's choice. The filter is kept for the app session, including a
+/// reload. (B24 moves it to the set picker and drops its Phase row.)
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
@@ -39,7 +34,6 @@ import '../data/results_sync.dart';
 import '../models/question.dart';
 import '../models/question_filter.dart';
 import '../models/question_parser.dart';
-import '../models/question_sets.dart';
 import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -50,10 +44,8 @@ import 'choose_correction_screen.dart';
 import 'fill_gap_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
-import 'home_card_grid.dart';
-import 'question_filter_card.dart';
+import 'phase_games_screen.dart';
 import 'repair_screen.dart';
-import 'set_picker_screen.dart';
 import 'spot_error_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -104,9 +96,8 @@ class _HomeScreenState extends State<HomeScreen> {
   /// (B7). Kept when the questions are reloaded.
   late final SessionTally _session = SessionTally(sync: widget.resultsSync);
 
-  /// What to play (B12) and the set picker's size and "by conversation"
-  /// (B24). Kept when the questions are reloaded.
-  SetChoices _choices = const SetChoices();
+  /// What to play (B12). Kept when the questions are reloaded.
+  QuestionFilter _filter = QuestionFilter.all;
 
   /// When the question file was last changed (B20), once known.
   DateTime? _updatedAt;
@@ -146,29 +137,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Opens [phase]'s set picker (B24) with every question of that phase;
-  /// the picker applies the filter's type and category itself.
+  /// Opens [phase]'s games (B23), with the questions that pass the filter.
   void _openPhase(QuestionPhase phase, List<Question> questions) {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => SetPickerScreen(
+        builder: (_) => PhaseGamesScreen(
           phase: phase,
-          questions: questions.where((q) => q.game.phase == phase).toList(),
-          choices: _choices,
-          onChoicesChanged: (c) => setState(() => _choices = c),
-          onSetSelected: _openSet,
+          questions: questions,
+          onGameSelected: _openGame,
         ),
       ),
     );
-  }
-
-  /// A set was tapped (B24). Until B25's player plays a whole set across
-  /// games, this opens the game of the set's first question with the set's
-  /// questions for that game.
-  void _openSet(QuestionSet set) {
-    if (set.questions.isEmpty) return;
-    final game = set.questions.first.game;
-    _openGame(game, set.questions.where((q) => q.game == game).toList());
   }
 
   void _openGame(GameType game, List<Question> questions) {
@@ -226,14 +205,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final parsed = snapshot.data!;
         // A category the new file no longer has is dropped, so a reload
         // never leaves every game empty for a reason that can't be seen.
-        final filter = _choices.filter.keepingCategoryIn(parsed.questions);
+        final filter = _filter.keepingCategoryIn(parsed.questions);
         final shown = filter.apply(parsed.questions);
         return _LoadedView(
           parsed: parsed,
           shown: shown,
           filter: filter,
-          onFilterChanged: (f) =>
-              setState(() => _choices = _choices.copyWith(filter: f)),
+          onFilterChanged: (f) => setState(() => _filter = f),
           sourceLine: sourceLineText(
             parsed.questions.length,
             widget.sourceName,
@@ -241,7 +219,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onReload: _reload,
           resultsSync: widget.resultsSync,
-          onPhaseSelected: (phase) => _openPhase(phase, parsed.questions),
+          onPhaseSelected: (phase) => _openPhase(
+            phase,
+            shown.where((q) => q.game.phase == phase).toList(),
+          ),
         );
       },
     );
@@ -386,7 +367,7 @@ class _LoadedView extends StatelessWidget {
               ? AppSpacing.s12
               : (laptop ? AppSpacing.s24 : AppSpacing.s16),
         ),
-        QuestionFilterCard(
+        _FilterCard(
           key: const ValueKey('home-filter'),
           filter: filter,
           categories: QuestionFilter.categoriesOf(parsed.questions),
@@ -396,7 +377,7 @@ class _LoadedView extends StatelessWidget {
         ),
         if (shown.isEmpty && parsed.questions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s12),
-          Text(QuestionFilterCard.noMatchText, style: type.caption),
+          Text(_FilterCard.noMatchText, style: type.caption),
         ],
         // The two choices (B23): phase 1, Andrew's own sentences with the
         // mistake marked; phase 2, points already corrected, in new
@@ -410,6 +391,139 @@ class _LoadedView extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The filter (B12): a quiet card like the skipped-questions notice. Shut,
+/// it reads "Filter: All questions" (or what is chosen, with "5 of 15
+/// questions" under it); open, it shows three rows of choices, Type, Phase
+/// and Category, each starting with "All". The chosen one in each row is
+/// highlighted.
+///
+/// The spec has no filter control; the choices use WordChip (the closest
+/// shared widget: a tappable chip with a highlighted state).
+class _FilterCard extends StatelessWidget {
+  const _FilterCard({
+    super.key,
+    required this.filter,
+    required this.categories,
+    required this.shownCount,
+    required this.totalCount,
+    required this.onChanged,
+  });
+
+  final QuestionFilter filter;
+  final List<String> categories;
+  final int shownCount;
+  final int totalCount;
+  final ValueChanged<QuestionFilter> onChanged;
+
+  static const String allLabel = 'All';
+  static const String noMatchText =
+      'No questions match this filter. Choose "All" in a row to widen it.';
+
+  static String countText(int shown, int total) =>
+      '$shown of ${total == 1 ? '1 question' : '$total questions'}';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+
+    Widget row<T>(
+      String label,
+      List<T> values,
+      String Function(T) labelOf,
+      T? chosen,
+      bool Function(T, T) same,
+      QuestionFilter Function(T?) change,
+    ) {
+      Widget chip(String text, bool selected, T? value) => WordChip(
+        key: ValueKey('filter-$label-$text'),
+        label: text,
+        state: selected ? WordChipState.placed : WordChipState.toPlace,
+        onPressed: selected ? null : () => onChanged(change(value)),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(header: true, child: Text(label, style: type.caption)),
+            const SizedBox(height: AppSpacing.s8),
+            Wrap(
+              spacing: AppSpacing.s8,
+              runSpacing: AppSpacing.s8,
+              children: [
+                chip(allLabel, chosen == null, null),
+                for (final v in values)
+                  chip(labelOf(v), chosen != null && same(v, chosen), v),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Material(
+      color: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: AppRadius.cardAll,
+        side: BorderSide(color: AppColors.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: AppColors.textMuted,
+        collapsedIconColor: AppColors.textMuted,
+        leading: Icon(
+          Icons.filter_list_rounded,
+          size: AppSizes.iconSmall,
+          color: filter.isAll ? AppColors.textMuted : AppColors.accent,
+        ),
+        title: Text(
+          'Filter: ${filter.summary}',
+          style: type.caption.copyWith(color: AppColors.textSecondary),
+        ),
+        subtitle: filter.isAll
+            ? null
+            : Text(countText(shownCount, totalCount), style: type.caption),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.s16,
+          0,
+          AppSpacing.s16,
+          AppSpacing.s16,
+        ),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row<QuestionType>(
+            'Type',
+            QuestionType.values,
+            QuestionFilter.typeLabel,
+            filter.type,
+            (a, b) => a == b,
+            filter.withType,
+          ),
+          row<QuestionPhase>(
+            'Phase',
+            QuestionPhase.values,
+            (p) => p.label,
+            filter.phase,
+            (a, b) => a == b,
+            filter.withPhase,
+          ),
+          if (categories.isNotEmpty)
+            row<String>(
+              'Category',
+              categories,
+              (c) => c,
+              filter.category,
+              (a, b) => a.trim().toLowerCase() == b.trim().toLowerCase(),
+              filter.withCategory,
+            ),
+        ],
+      ),
     );
   }
 }
