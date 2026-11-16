@@ -73,9 +73,10 @@ void main() {
       expect(
         t.resultsText(),
         'Spanish Games results 2026-11-01\n'
-        'FB-0001, choose_correction, right, 2026-11-01\n'
-        'FB-0007, fill_gap, wrong, 2026-11-01\n'
-        'FB-0003, repair, right, 2026-11-01',
+        'FB-0001, choose_correction, right, 2026-11-01, item FB-0001, '
+        'stage 1\n'
+        'FB-0007, fill_gap, wrong, 2026-11-01, item FB-0007, stage 4\n'
+        'FB-0003, repair, right, 2026-11-01, item FB-0003, stage 3',
       );
     });
 
@@ -89,8 +90,8 @@ void main() {
       t.record(_q('FB-0001', GameType.chooseCorrection), true);
       expect(t.resultsText().split('\n'), [
         'Spanish Games results 2026-11-01',
-        'FB-0001, choose_correction, right, 2026-11-01',
-        'FB-0002, choose_correction, right, 2026-10-31',
+        'FB-0001, choose_correction, right, 2026-11-01, item FB-0001, stage 1',
+        'FB-0002, choose_correction, right, 2026-10-31, item FB-0002, stage 1',
       ]);
       expect(t.entries.map((e) => e.id), ['FB-0001', 'FB-0002']);
     });
@@ -101,7 +102,7 @@ void main() {
         ..record(_q('FB-0005', GameType.repair), false, hinted: true);
       expect(
         t.resultsText().split('\n').last,
-        'FB-0005, repair, right with hint, 2026-11-09',
+        'FB-0005, repair, right with hint, 2026-11-09, item FB-0005, stage 3',
       );
       expect(t.scoreFor(QuestionPhase.noticeAndCorrect), (
         right: 0,

@@ -92,6 +92,79 @@ enum GameType {
       GameType.values.where((g) => g.phase == phase).toList();
 }
 
+/// Where a question sits on the stage ladder (approved 2026-11-16, B26).
+///
+/// One ladder per mistake, recognise before produce:
+/// 1 `choose_correction`, 2 `fill_gap` with options, 3 `repair`,
+/// 4 `fill_gap` typed, 5 `spot_error`, then consolidation (`order`,
+/// `match`). In the file `stage` is `1`–`5` or `"consolidation"`.
+enum LadderStage {
+  one(1, 'Stage 1'),
+  two(2, 'Stage 2'),
+  three(3, 'Stage 3'),
+  four(4, 'Stage 4'),
+  five(5, 'Stage 5'),
+  consolidation(null, 'Consolidation');
+
+  const LadderStage(this.number, this.label);
+
+  /// 1–5, or `null` for [consolidation].
+  final int? number;
+
+  /// Plain-English name, e.g. "Stage 3" or "Consolidation".
+  final String label;
+
+  /// The value written in `questions.json` and sent with results: the
+  /// number, or `"consolidation"`.
+  Object get jsonValue => number ?? consolidationValue;
+
+  /// The `stage` value for consolidation questions.
+  static const String consolidationValue = 'consolidation';
+
+  /// Reads a `stage` value: a whole number 1–5 (also written as a string,
+  /// as a spreadsheet may give it) or `"consolidation"` (any case). Returns
+  /// `null` for anything else.
+  static LadderStage? fromJson(Object? value) {
+    int? n;
+    if (value is int) {
+      n = value;
+    } else if (value is double && value == value.roundToDouble()) {
+      n = value.toInt();
+    } else if (value is String) {
+      final s = value.trim();
+      if (s.toLowerCase() == consolidationValue) return consolidation;
+      n = int.tryParse(s);
+    }
+    for (final stage in LadderStage.values) {
+      if (stage.number != null && stage.number == n) return stage;
+    }
+    return null;
+  }
+
+  /// The stage a question of [game] belongs to. `fill_gap` is stage 2 with
+  /// options and stage 4 without. Used when a file has no `stage`, so files
+  /// written before the ladder still load.
+  static LadderStage forGame(GameType game, {required bool hasOptions}) =>
+      switch (game) {
+        GameType.chooseCorrection => one,
+        GameType.fillGap => hasOptions ? two : four,
+        GameType.repair => three,
+        GameType.spotError => five,
+        GameType.order || GameType.match => consolidation,
+      };
+
+  /// What this stage is played with, for messages: "choose_correction",
+  /// "fill_gap with options", "order or match".
+  String get gameDescription => switch (this) {
+    one => 'choose_correction',
+    two => 'fill_gap with options',
+    three => 'repair',
+    four => 'fill_gap without options',
+    five => 'spot_error',
+    consolidation => 'order or match',
+  };
+}
+
 /// What kind of point the question makes. Replaced `severity` on 2026-10-17.
 enum QuestionType {
   /// A grammatical mistake: prepositions, tense, mood, ser/estar, agreement,
@@ -194,11 +267,56 @@ class Question {
     this.hint,
     this.source = '',
     this.added = '',
+    LadderStage? stage,
+    String? item,
+    this.unlocksAfter,
+    this.fixedStart,
+    this.fixedEnd,
+    this.ruleId,
     List<PromptRun>? promptRuns,
-  }) : promptRuns = promptRuns ?? parsePromptMarks(prompt);
+  }) : promptRuns = promptRuns ?? parsePromptMarks(prompt),
+       stage =
+           stage ??
+           LadderStage.forGame(
+             game,
+             hasOptions: options != null && options.isNotEmpty,
+           ),
+       item = item ?? id;
 
-  /// Unique, date-prefixed id, e.g. `2026-10-17-001`.
+  /// Unique per question. Before the ladder, the Test Review Item ID
+  /// (FB-0001) or a date-prefixed id (`2026-10-17-001`); on the ladder
+  /// `<item>-s<stage>` (FB-0012-s3, FB-0012-sc1), because a dropped-back
+  /// mistake has two questions in the file.
   final String id;
+
+  /// The stage ladder stage (B26). Taken from the file's `stage`, or worked
+  /// out from the game when the file has none ([LadderStage.forGame]).
+  final LadderStage stage;
+
+  /// The Test Review Item ID of the mistake (FB-0001). Several questions
+  /// can share one item (a dropped-back mistake; consolidation rounds).
+  /// Equal to [id] when the file has no `item`.
+  final String item;
+
+  /// Optional (B26): the [id] of the question that unlocks this one in the
+  /// same session, after a wrong answer dropped the mistake back a stage.
+  /// The question stays locked until that one is answered right this
+  /// session (B30 does the locking).
+  final String? unlocksAfter;
+
+  /// `order` only, optional (B26): text shown as it is before the shuffled
+  /// words when the sentence is long. Filled in by the Apps Script.
+  final String? fixedStart;
+
+  /// `order` only, optional (B26): text shown as it is after the shuffled
+  /// words.
+  final String? fixedEnd;
+
+  /// `match` only, optional (B26): the rule bank ID the round was made
+  /// from, e.g. `subj-esperar`. Read from the file's `rule` field on a
+  /// `match` question; on the other games `rule` is the display rule
+  /// ([rule]).
+  final String? ruleId;
 
   final GameType game;
 
@@ -344,12 +462,17 @@ class Question {
       if (options != null) 'options': options,
       if (missingWord) 'missing_word': true,
       'explanation': explanation,
-      if (rule != null) 'rule': rule,
+      if ((ruleId ?? rule) != null) 'rule': ruleId ?? rule,
       if (meaning != null) 'meaning': meaning,
       if (focus != null) 'focus': focus,
       if (hint != null) 'hint': hint,
       'source': source,
       'added': added,
+      'stage': stage.jsonValue,
+      if (item != id) 'item': item,
+      if (unlocksAfter != null) 'unlocks_after': unlocksAfter,
+      if (fixedStart != null) 'fixed_start': fixedStart,
+      if (fixedEnd != null) 'fixed_end': fixedEnd,
     };
   }
 

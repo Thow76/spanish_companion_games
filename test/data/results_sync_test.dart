@@ -74,6 +74,8 @@ void main() {
       expect(script.bodies.single['results'], [
         {
           'id': 'FB-0001',
+          'item': 'FB-0001',
+          'stage': 4,
           'game': 'fill_gap',
           'phase': 2,
           'right': true,
@@ -103,6 +105,8 @@ void main() {
     expect(script.bodies.last['results'], [
       {
         'id': 'FB-0002',
+        'item': 'FB-0002',
+        'stage': 3,
         'game': 'repair',
         'phase': 1,
         'right': false,
@@ -125,6 +129,8 @@ void main() {
       expect(script.bodies.single['results'], [
         {
           'id': 'FB-0005',
+          'item': 'FB-0005',
+          'stage': 3,
           'game': 'repair',
           'phase': 1,
           'right': false,

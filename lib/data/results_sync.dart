@@ -33,6 +33,11 @@
 /// `"right": false, "hinted": true` (the field is left out otherwise). The
 /// script ignores `hinted` for now, so the item counts as not passed.
 ///
+/// B26 (stage ladder): every result also carries `item` (the Test Review
+/// Item ID; the same as `id` for files without `item`) and `stage` (1–5 or
+/// `"consolidation"`), e.g. `{"id": "FB-0012-s3", "item": "FB-0012",
+/// "stage": 3, …}`. The script before B27 ignores both.
+///
 /// The script answers `{"ok": true, "saved": ["FB-0001"], "unknown": []}`.
 /// `unknown` lists ids with no row in the sheet (e.g. the sample file's
 /// ids); they are not sent again.
@@ -169,6 +174,8 @@ class ResultsSync extends ChangeNotifier {
       for (final e in entries)
         {
           'id': e.id,
+          'item': e.item,
+          'stage': e.stage.jsonValue,
           'game': e.game.jsonValue,
           'phase': e.phase.number,
           'right': e.right,
