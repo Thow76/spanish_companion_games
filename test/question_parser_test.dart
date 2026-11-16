@@ -225,7 +225,7 @@ void main() {
       final raw = repair(
         overrides: {'focus': 'Verb agreement', 'hint': 'One or many?'},
       );
-      expect(questionFromJson(raw).toJson(), raw);
+      expect(questionFromJson(raw).toJson(), {...raw, 'stage': 3});
       expect(questionFromJson(repair()).toJson().containsKey('focus'), isFalse);
       expect(questionFromJson(repair()).toJson().containsKey('hint'), isFalse);
     });
@@ -265,8 +265,10 @@ void main() {
     });
 
     test('toJson round-trips', () {
+      // B26: toJson always writes the stage, worked out from the game when
+      // the file has none.
       final raw = chooseCorrection();
-      expect(questionFromJson(raw).toJson(), raw);
+      expect(questionFromJson(raw).toJson(), {...raw, 'stage': 1});
 
       final missing = chooseCorrection(
         overrides: {
@@ -276,7 +278,7 @@ void main() {
           'missing_word': true,
         },
       );
-      expect(questionFromJson(missing).toJson(), missing);
+      expect(questionFromJson(missing).toJson(), {...missing, 'stage': 1});
 
       final match = {
         'id': 'm1',
@@ -293,7 +295,10 @@ void main() {
         'source': '',
         'added': '',
       };
-      expect(questionFromJson(match).toJson(), match);
+      expect(questionFromJson(match).toJson(), {
+        ...match,
+        'stage': 'consolidation',
+      });
     });
 
     group('rejects', () {
@@ -627,6 +632,292 @@ void main() {
         isTrue,
         reason: 'sample should include a language note',
       );
+      // B26: every ladder stage, a drop-back pair and both consolidation
+      // games with their extra fields.
+      for (final stage in LadderStage.values) {
+        expect(result.countByStage[stage], greaterThan(0), reason: stage.label);
+      }
+      final locked = result.questions.where((q) => q.unlocksAfter != null);
+      expect(locked, isNotEmpty, reason: 'sample should include a drop-back');
+      for (final q in locked) {
+        final opener = result.questions.firstWhere(
+          (o) => o.id == q.unlocksAfter,
+        );
+        expect(opener.item, q.item);
+        expect(opener.stage.number, q.stage.number! - 1);
+      }
+      expect(
+        result
+            .forGame(GameType.order)
+            .any((q) => q.fixedStart != null && q.fixedEnd != null),
+        isTrue,
+        reason: 'sample should include an order with fixed start and end',
+      );
+      expect(
+        result.forGame(GameType.match).any((q) => q.ruleId != null),
+        isTrue,
+        reason: 'sample should include a match with a rule bank ID',
+      );
+    });
+  });
+
+  group('stage ladder (B26)', () {
+    Map<String, dynamic> match({Map<String, dynamic> overrides = const {}}) => {
+      'id': 'FB-0001-sc1',
+      'game': 'match',
+      'prompt': 'Match the verb to its preposition',
+      'answers': [
+        ['pensar', 'en'],
+        ['acordarse', 'de'],
+      ],
+      ...overrides,
+    };
+
+    Map<String, dynamic> order({Map<String, dynamic> overrides = const {}}) => {
+      'id': 'FB-0002-sc1',
+      'game': 'order',
+      'prompt': 'me di cuenta de que había olvidado',
+      'answers': ['me di cuenta de que había olvidado'],
+      ...overrides,
+    };
+
+    test('old files: stage worked out from the game, item = id', () {
+      expect(questionFromJson(chooseCorrection()).stage, LadderStage.one);
+      expect(questionFromJson(fillGap()).stage, LadderStage.two);
+      expect(questionFromJson(repair()).stage, LadderStage.three);
+      expect(
+        questionFromJson(fillGap(overrides: {'options': null})).stage,
+        LadderStage.four,
+      );
+      expect(questionFromJson(spotError()).stage, LadderStage.five);
+      expect(questionFromJson(match()).stage, LadderStage.consolidation);
+      expect(questionFromJson(order()).stage, LadderStage.consolidation);
+      final q = questionFromJson(repair());
+      expect(q.item, q.id);
+      expect(q.unlocksAfter, isNull);
+    });
+
+    test('reads stage and item', () {
+      final q = questionFromJson(
+        repair(overrides: {'id': 'FB-0012-s3', 'item': 'FB-0012', 'stage': 3}),
+      );
+      expect(q.stage, LadderStage.three);
+      expect(q.item, 'FB-0012');
+      expect(q.id, 'FB-0012-s3');
+      // A spreadsheet may give the stage as text or as 3.0.
+      expect(
+        questionFromJson(repair(overrides: {'stage': '3'})).stage,
+        LadderStage.three,
+      );
+      expect(
+        questionFromJson(repair(overrides: {'stage': 3.0})).stage,
+        LadderStage.three,
+      );
+      expect(
+        questionFromJson(order(overrides: {'stage': 'Consolidation'})).stage,
+        LadderStage.consolidation,
+      );
+      // Blank item or stage: treated as absent.
+      final blank = questionFromJson(
+        repair(overrides: {'item': ' ', 'stage': ''}),
+      );
+      expect(blank.item, blank.id);
+      expect(blank.stage, LadderStage.three);
+    });
+
+    test('fill_gap is stage 2 with options and stage 4 without', () {
+      expect(
+        questionFromJson(fillGap(overrides: {'stage': 2})).stage,
+        LadderStage.two,
+      );
+      expect(
+        questionFromJson(
+          fillGap(overrides: {'stage': 4, 'options': null}),
+        ).stage,
+        LadderStage.four,
+      );
+    });
+
+    void rejects(Map<String, dynamic> raw, Pattern message) {
+      expect(
+        () => questionFromJson(raw),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains(message),
+          ),
+        ),
+      );
+    }
+
+    test('a stage that does not fit the game is reported', () {
+      rejects(
+        chooseCorrection(overrides: {'stage': 2}),
+        'fill_gap with options',
+      );
+      rejects(fillGap(overrides: {'stage': 4}), 'fill_gap with options');
+      rejects(fillGap(overrides: {'stage': 2, 'options': null}), 'without');
+      rejects(repair(overrides: {'stage': 'consolidation'}), 'order or match');
+      rejects(match(overrides: {'stage': 5}), 'spot_error');
+      rejects(repair(overrides: {'stage': 6}), '1 to 5 or "consolidation"');
+      rejects(repair(overrides: {'stage': 'C'}), '1 to 5 or "consolidation"');
+      rejects(repair(overrides: {'stage': 2.5}), '1 to 5 or "consolidation"');
+    });
+
+    test('item, unlocks_after and fixed text must be strings', () {
+      rejects(repair(overrides: {'item': 12}), '"item" must be a string');
+      rejects(
+        repair(overrides: {'unlocks_after': 3}),
+        '"unlocks_after" must be a string',
+      );
+      rejects(
+        order(
+          overrides: {
+            'fixed_start': ['a'],
+          },
+        ),
+        '"fixed_start" must be a string',
+      );
+    });
+
+    test('unlocks_after must not be the question itself', () {
+      rejects(
+        repair(overrides: {'unlocks_after': '2026-10-17-005'}),
+        'its own "id"',
+      );
+    });
+
+    test('fixed_start and fixed_end: order only', () {
+      final q = questionFromJson(
+        order(
+          overrides: {
+            'fixed_start': 'Cuando llegué a casa anoche, ',
+            'fixed_end': 'las llaves en el trabajo.',
+          },
+        ),
+      );
+      expect(q.fixedStart, 'Cuando llegué a casa anoche,');
+      expect(q.fixedEnd, 'las llaves en el trabajo.');
+      expect(questionFromJson(order()).fixedStart, isNull);
+      rejects(
+        repair(overrides: {'fixed_end': 'en el trabajo.'}),
+        'only for order questions',
+      );
+    });
+
+    test('rule on a match question is the rule bank ID', () {
+      final q = questionFromJson(match(overrides: {'rule': 'prep-verb'}));
+      expect(q.ruleId, 'prep-verb');
+      expect(q.rule, isNull, reason: 'not shown as the explanation rule');
+      // On the other games rule is still the display rule.
+      final f = questionFromJson(fillGap(overrides: {'rule': 'depender de'}));
+      expect(f.rule, 'depender de');
+      expect(f.ruleId, isNull);
+    });
+
+    test('ladder fields round-trip through toJson', () {
+      final raw = fillGap(
+        overrides: {
+          'id': 'FB-0012-s4',
+          'item': 'FB-0012',
+          'stage': 4,
+          'unlocks_after': 'FB-0012-s3',
+          'options': null,
+        },
+      )..remove('options');
+      expect(questionFromJson(raw).toJson(), raw);
+
+      final m = {
+        ...match(overrides: {'rule': 'prep-verb', 'item': 'FB-0001'}),
+        'phase': 2,
+        'type': 'grammar',
+        'category': '',
+        'explanation': '',
+        'source': '',
+        'added': '',
+        'stage': 'consolidation',
+      };
+      expect(questionFromJson(m).toJson(), m);
+
+      final o = {
+        ...order(
+          overrides: {
+            'fixed_start': 'Cuando llegué a casa anoche,',
+            'fixed_end': 'las llaves en el trabajo.',
+          },
+        ),
+        'phase': 2,
+        'type': 'grammar',
+        'category': '',
+        'explanation': '',
+        'source': '',
+        'added': '',
+        'stage': 'consolidation',
+      };
+      expect(questionFromJson(o).toJson(), o);
+    });
+
+    test('a question locked behind a missing question is skipped', () {
+      final result = parseQuestionList([
+        repair(overrides: {'id': 'FB-0012-s3', 'item': 'FB-0012'}),
+        fillGap(
+          overrides: {
+            'id': 'FB-0012-s4',
+            'item': 'FB-0012',
+            'options': null,
+            'unlocks_after': 'FB-0012-s3',
+          },
+        ),
+        fillGap(
+          overrides: {
+            'id': 'FB-0020-s2',
+            'item': 'FB-0020',
+            'unlocks_after': 'FB-0020-s1',
+          },
+        ),
+        // Locked behind the one above, which is skipped: skipped too.
+        spotError(
+          overrides: {
+            'id': 'FB-0020-s5',
+            'item': 'FB-0020',
+            'unlocks_after': 'FB-0020-s2',
+          },
+        ),
+      ]);
+      expect(result.questions.map((q) => q.id), ['FB-0012-s3', 'FB-0012-s4']);
+      expect(result.questions.last.unlocksAfter, 'FB-0012-s3');
+      expect(result.problems.map((p) => p.id), ['FB-0020-s2', 'FB-0020-s5']);
+      expect(result.problems.first.message, contains('"FB-0020-s1"'));
+    });
+
+    test('counts and groups by stage', () {
+      final result = parseQuestionList([
+        chooseCorrection(),
+        repair(),
+        fillGap(),
+        fillGap(overrides: {'id': 'typed', 'options': null}),
+        match(),
+      ]);
+      expect(result.countByStage, {
+        LadderStage.one: 1,
+        LadderStage.two: 1,
+        LadderStage.three: 1,
+        LadderStage.four: 1,
+        LadderStage.five: 0,
+        LadderStage.consolidation: 1,
+      });
+      expect(result.forStage(LadderStage.four).single.id, 'typed');
+      expect(result.byStage.keys, LadderStage.values);
+      expect(result.byStage[LadderStage.five], isEmpty);
+    });
+
+    test('LadderStage values', () {
+      expect(LadderStage.three.jsonValue, 3);
+      expect(LadderStage.consolidation.jsonValue, 'consolidation');
+      expect(LadderStage.fromJson('5'), LadderStage.five);
+      expect(LadderStage.fromJson(0), isNull);
+      expect(LadderStage.fromJson(null), isNull);
     });
   });
 

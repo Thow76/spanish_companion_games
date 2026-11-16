@@ -252,9 +252,12 @@ void main() {
       expect(
         copied,
         'Spanish Games results 2026-11-01\n'
-        '2026-10-17-008, fill_gap, right, 2026-11-01\n'
-        '2026-10-17-001, choose_correction, right, 2026-11-01\n'
-        '2026-10-17-002, choose_correction, wrong, 2026-11-01',
+        '2026-10-17-008, fill_gap, right, 2026-11-01, '
+        'item 2026-10-17-008, stage 2\n'
+        '2026-10-17-001, choose_correction, right, 2026-11-01, '
+        'item 2026-10-17-001, stage 1\n'
+        '2026-10-17-002, choose_correction, wrong, 2026-11-01, '
+        'item 2026-10-17-002, stage 1',
       );
       expect(find.text(CopyResultsButton.copiedText(3)), findsOneWidget);
       expect(find.text(CopyResultsButton.againLabel), findsOneWidget);

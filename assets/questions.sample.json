@@ -198,5 +198,72 @@
     "explanation": "depender de + el = del (this sentence is already correct)",
     "source": "Weekend plans, 2026-10-16",
     "added": "2026-10-17"
+  },
+  {
+    "id": "SAMPLE-0001-s3",
+    "item": "SAMPLE-0001",
+    "stage": 3,
+    "phase": 1,
+    "game": "repair",
+    "type": "grammar",
+    "category": "Verb forms",
+    "prompt": "Espero que **tienes** un buen fin de semana.",
+    "answers": ["Espero que tengas un buen fin de semana."],
+    "explanation": "esperar que + subjunctive = to hope that",
+    "focus": "Verb form after espero que",
+    "hint": "Think about the subjunctive",
+    "source": "Weekend plans, 2026-11-13",
+    "added": "2026-11-16"
+  },
+  {
+    "id": "SAMPLE-0001-s4",
+    "item": "SAMPLE-0001",
+    "stage": 4,
+    "unlocks_after": "SAMPLE-0001-s3",
+    "phase": 2,
+    "game": "fill_gap",
+    "type": "grammar",
+    "category": "Verb forms",
+    "prompt": "Espero que ___ (tener) un buen viaje.",
+    "answers": ["tengas"],
+    "explanation": "esperar que + subjunctive = to hope that",
+    "source": "Weekend plans, 2026-11-13",
+    "added": "2026-11-16"
+  },
+  {
+    "id": "SAMPLE-0002-sc1",
+    "item": "SAMPLE-0002",
+    "stage": "consolidation",
+    "phase": 2,
+    "game": "order",
+    "type": "grammar",
+    "category": "Prepositions",
+    "prompt": "me di cuenta de que había olvidado",
+    "answers": ["me di cuenta de que había olvidado"],
+    "fixed_start": "Cuando llegué a casa anoche,",
+    "fixed_end": "las llaves en el trabajo.",
+    "explanation": "darse cuenta de que = to realise that",
+    "source": "Work and plans, 2026-11-12",
+    "added": "2026-11-16"
+  },
+  {
+    "id": "2026-10-17-001-sc1",
+    "item": "2026-10-17-001",
+    "stage": "consolidation",
+    "rule": "prep-verb",
+    "phase": 2,
+    "game": "match",
+    "type": "grammar",
+    "category": "Prepositions",
+    "prompt": "Match the verb to its preposition",
+    "answers": [
+      ["pensar", "en"],
+      ["acordarse", "de"],
+      ["casarse", "con"],
+      ["aprender", "a"]
+    ],
+    "explanation": "pensar en, acordarse de, casarse con, aprender a = verbs that take a fixed preposition",
+    "source": "Work and plans, 2026-10-14",
+    "added": "2026-11-16"
   }
 ]

@@ -7,6 +7,13 @@
 /// Files written before 2026-10-17 still load: a missing `phase` is taken
 /// from the game, and `severity: "error"` / `"suggestion"` is read as
 /// `type: "grammar"` / `"note"`.
+///
+/// Stage ladder (B26, approved 2026-11-16): `stage`, `item`,
+/// `unlocks_after`, `fixed_start`/`fixed_end` (`order`) and `rule` (`match`:
+/// the rule bank ID). A missing `stage` is worked out from the game, and a
+/// missing `item` is the `id`, so older files still load. A `stage` that does
+/// not fit the game is reported and the question skipped, as is an
+/// `unlocks_after` that points at no question in the file.
 library;
 
 import 'dart:convert';
@@ -76,6 +83,25 @@ class ParsedQuestions {
   /// Valid questions for one phase.
   List<Question> forPhase(QuestionPhase phase) =>
       questions.where((q) => q.phase == phase).toList();
+
+  /// Number of valid questions per ladder stage (B26).
+  Map<LadderStage, int> get countByStage {
+    final counts = <LadderStage, int>{for (final s in LadderStage.values) s: 0};
+    for (final q in questions) {
+      counts[q.stage] = counts[q.stage]! + 1;
+    }
+    return counts;
+  }
+
+  /// Valid questions for one ladder stage, in file order (B26).
+  List<Question> forStage(LadderStage stage) =>
+      questions.where((q) => q.stage == stage).toList();
+
+  /// Valid questions grouped by ladder stage, every stage present (empty
+  /// when the file has none), in ladder order (B26).
+  Map<LadderStage, List<Question>> get byStage => {
+    for (final s in LadderStage.values) s: forStage(s),
+  };
 }
 
 /// Thrown when the file as a whole cannot be read: not JSON, or not an array.
@@ -112,7 +138,7 @@ ParsedQuestions parseQuestionList(Object? decoded) {
     );
   }
 
-  final questions = <Question>[];
+  final parsed = <(int, Question)>[];
   final problems = <QuestionProblem>[];
   final seenIds = <String>{};
 
@@ -124,13 +150,46 @@ ParsedQuestions parseQuestionList(Object? decoded) {
       if (!seenIds.add(question.id)) {
         throw const FormatException('duplicate id');
       }
-      questions.add(question);
+      parsed.add((i, question));
     } on FormatException catch (e) {
       problems.add(QuestionProblem(index: i, id: id, message: e.message));
     }
   }
 
-  return ParsedQuestions(questions: questions, problems: problems);
+  // B26: a question locked behind another (`unlocks_after`) could never be
+  // unlocked if that question is not in the file, so it is skipped too.
+  // Repeated until nothing changes, in case the unlocking question was
+  // itself skipped for the same reason.
+  var kept = parsed;
+  while (true) {
+    final ids = {for (final (_, q) in kept) q.id};
+    final next = <(int, Question)>[];
+    for (final entry in kept) {
+      final (i, q) = entry;
+      final after = q.unlocksAfter;
+      if (after != null && !ids.contains(after)) {
+        problems.add(
+          QuestionProblem(
+            index: i,
+            id: q.id,
+            message:
+                '"unlocks_after" is "$after", but no question in the file '
+                'has that id',
+          ),
+        );
+      } else {
+        next.add(entry);
+      }
+    }
+    if (next.length == kept.length) break;
+    kept = next;
+  }
+  problems.sort((a, b) => a.index.compareTo(b.index));
+
+  return ParsedQuestions(
+    questions: [for (final (_, q) in kept) q],
+    problems: problems,
+  );
 }
 
 /// Builds one [Question] from its JSON object.
@@ -213,6 +272,29 @@ Question questionFromJson(Object? raw) {
     missingWord = rawMissing;
   }
 
+  final stage = _parseStage(raw, game, options);
+
+  final item = _optionalTextField(raw, 'item') ?? id;
+
+  final unlocksAfter = _optionalTextField(raw, 'unlocks_after');
+  if (unlocksAfter != null && unlocksAfter == id) {
+    throw const FormatException('"unlocks_after" must not be its own "id"');
+  }
+
+  final fixedStart = _optionalTextField(raw, 'fixed_start');
+  final fixedEnd = _optionalTextField(raw, 'fixed_end');
+  if ((fixedStart != null || fixedEnd != null) && game != GameType.order) {
+    throw FormatException(
+      '"fixed_start" and "fixed_end" are only for order questions, '
+      'not ${game.jsonValue}',
+    );
+  }
+
+  // `rule`: on a match question, the rule bank ID (B26); on the other games,
+  // the rule as a short pattern for the explanation card.
+  final ruleText = _optionalText(raw['rule']);
+  final isMatch = game == GameType.match;
+
   return Question(
     id: id,
     game: game,
@@ -225,13 +307,53 @@ Question questionFromJson(Object? raw) {
     options: options,
     missingWord: missingWord,
     explanation: _optionalString(raw['explanation']) ?? '',
-    rule: _optionalText(raw['rule']),
+    rule: isMatch ? null : ruleText,
+    ruleId: isMatch ? ruleText?.trim() : null,
     meaning: _optionalText(raw['meaning']),
     focus: _optionalText(raw['focus']),
     hint: _optionalText(raw['hint']),
     source: _optionalString(raw['source']) ?? '',
     added: _optionalString(raw['added']) ?? '',
+    stage: stage,
+    item: item,
+    unlocksAfter: unlocksAfter,
+    fixedStart: fixedStart,
+    fixedEnd: fixedEnd,
   );
+}
+
+/// `stage` (B26): optional; worked out from the game when absent. When
+/// given it must be 1–5 or "consolidation" and fit the game: 1
+/// choose_correction, 2 fill_gap with options, 3 repair, 4 fill_gap without
+/// options, 5 spot_error, consolidation order or match.
+LadderStage _parseStage(
+  Map<dynamic, dynamic> raw,
+  GameType game,
+  List<String>? options,
+) {
+  final hasOptions = options != null && options.isNotEmpty;
+  final derived = LadderStage.forGame(game, hasOptions: hasOptions);
+  final rawStage = raw['stage'];
+  if (rawStage == null || (rawStage is String && rawStage.trim().isEmpty)) {
+    return derived;
+  }
+  final stage = LadderStage.fromJson(rawStage);
+  if (stage == null) {
+    throw FormatException(
+      '"stage" must be 1 to 5 or "consolidation", got ${_show(rawStage)}',
+    );
+  }
+  if (stage != derived) {
+    final what = game == GameType.fillGap
+        ? 'fill_gap ${hasOptions ? 'with' : 'without'} options'
+        : game.jsonValue;
+    throw FormatException(
+      '"stage" is ${_show(rawStage)}, which is played with '
+      '${stage.gameDescription}, but this question is $what '
+      '(${derived.label.toLowerCase()})',
+    );
+  }
+  return stage;
 }
 
 /// `type` ("grammar" / "note"); the old `severity` ("error" / "suggestion")
@@ -359,6 +481,20 @@ String? _optionalText(Object? value) {
   final s = _optionalString(value);
   if (s == null || s.trim().isEmpty) return null;
   return s;
+}
+
+/// An optional text field: `null` when absent, null or blank; reported when
+/// it is there but not a string.
+String? _optionalTextField(Map<dynamic, dynamic> raw, String key) {
+  final value = raw[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException(
+      '"$key" must be a string when present, got ${_describe(value)}',
+    );
+  }
+  if (value.trim().isEmpty) return null;
+  return value.trim();
 }
 
 List<String> _stringList(List<dynamic> list, String key) {

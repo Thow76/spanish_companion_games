@@ -23,6 +23,10 @@
 /// B22: a Repair question right only on the second try, after the hint, is
 /// recorded as not passed (`right: false`) with `hinted: true`, so the item
 /// comes back; Copy results writes it as "right with hint".
+///
+/// B26: each entry also keeps the question's Test Review item and its
+/// ladder stage, sent with the result and added to the copied lines, so
+/// the sheet can move the mistake up or down the ladder.
 library;
 
 import '../data/results_sync.dart';
@@ -34,6 +38,8 @@ typedef PhaseScore = ({int right, int answered});
 /// One checked question, as kept by the tally.
 typedef TallyEntry = ({
   String id,
+  String item,
+  LadderStage stage,
   GameType game,
   QuestionPhase phase,
   bool right,
@@ -76,6 +82,8 @@ class SessionTally {
   void record(Question question, bool right, {bool hinted = false}) {
     final entry = (
       id: question.id,
+      item: question.item,
+      stage: question.stage,
       game: question.game,
       phase: question.phase,
       right: right && !hinted,
@@ -121,22 +129,23 @@ class SessionTally {
   ///
   /// ```
   /// Spanish Games results 2026-11-01
-  /// FB-0001, choose_correction, right, 2026-11-01
-  /// FB-0007, fill_gap, wrong, 2026-11-01
+  /// FB-0001-s1, choose_correction, right, 2026-11-01, item FB-0001, stage 1
+  /// FB-0007-s2, fill_gap, wrong, 2026-11-01, item FB-0007, stage 2
   /// ```
   ///
   /// Fields are the question's `id`, its `game` value as in
   /// `questions.json`, "right", "wrong" or "right with hint" (B22: right on
-  /// the second try, after the hint, which counts as not passed), and the
-  /// day it was checked
-  /// (local time, YYYY-MM-DD). [now] is the day in the header (default: the
-  /// tally's clock).
+  /// the second try, after the hint, which counts as not passed), the day
+  /// it was checked (local time, YYYY-MM-DD), then (B26) the Test Review
+  /// item and the ladder stage (1–5 or consolidation). [now] is the day in
+  /// the header (default: the tally's clock).
   String resultsText({DateTime? now}) {
     final lines = <String>[resultsHeader(now ?? _clock())];
     for (final e in _results.values) {
       lines.add(
         '${e.id}, ${e.game.jsonValue}, ${resultWord(e)}, '
-        '${dateText(e.checkedAt)}',
+        '${dateText(e.checkedAt)}, item ${e.item}, '
+        'stage ${e.stage.jsonValue}',
       );
     }
     return lines.join('\n');
