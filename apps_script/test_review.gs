@@ -3,7 +3,8 @@
 //    and from the Spanish Games menu): the tab becomes questions.json on
 //    Drive, which the app reads. Run setUpTriggers() once to switch this on.
 //  - Results: the app sends each answer here (deployed as a web app) and
-//    the script fills in Test Review.
+//    the script moves the mistake along the stage ladder in Test Review
+//    (Stage, Locked Stage, Last Result, Last Practised).
 // Lives in the Test Review sheet (Extensions → Apps Script).
 
 const FILE_ID = '1_ooFoNCuUjmMDNXWn8NFjl4GzMjxerPs'; // questions.json in the Spanish Companion folder
@@ -22,6 +23,7 @@ function book_() {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Spanish Games')
     .addItem('Update questions.json now', 'exportQuestions')
+    .addItem('Move items onto the ladder', 'moveItemsOntoLadder')
     .addToUi();
 }
 
@@ -73,7 +75,10 @@ function text_(v, tz) {
 
 // Column numbers (1-based) in the Test Review tab, found by header name.
 // "Passed" appears three times, so each one is the column after its
-// "... Complete" column.
+// "... Complete" column. The old Test 1 / Resit / Recall columns are only
+// read now (history, and for "Move items onto the ladder"). The script owns
+// Stage, Locked Stage, Last Result and Last Practised and adds any of those
+// headers that are missing; Rule ID belongs to the ChatGPT games task.
 function reviewColumns_(sheet) {
   const head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
     .map(h => String(h).trim().toLowerCase());
@@ -85,15 +90,137 @@ function reviewColumns_(sheet) {
     resit: find('resit complete'),
     recall: find('recall complete'),
     lastPractised: find('last practised'),
+    stage: find('stage'),
+    lockedStage: find('locked stage'),
+    lastResult: find('last result'),
+    ruleId: find('rule id'),
   };
   cols.test1Passed = cols.test1 ? cols.test1 + 1 : 0;
   cols.resitPassed = cols.resit ? cols.resit + 1 : 0;
   cols.recallPassed = cols.recall ? cols.recall + 1 : 0;
-  if (!cols.lastPractised) {
-    cols.lastPractised = head.length + 1;
-    sheet.getRange(1, cols.lastPractised).setValue('Last Practised');
-  }
+  let next = head.length + 1;
+  const ensure = (key, title) => {
+    if (cols[key]) return;
+    cols[key] = next++;
+    sheet.getRange(1, cols[key]).setValue(title);
+  };
+  ensure('lastPractised', 'Last Practised');
+  ensure('stage', 'Stage');
+  ensure('lockedStage', 'Locked Stage');
+  ensure('lastResult', 'Last Result');
   return cols;
+}
+
+// ---------- The stage ladder ----------
+// Stages are kept as ranks: 1–5, 6 = C (Consolidation), 7 = R (retired),
+// 0 = not on the ladder yet.
+
+const CONSOLIDATION = 6;
+const RETIRED = 7;
+
+// A Test Review Stage or Locked Stage cell → rank.
+function sheetRank_(v) {
+  const t = String(v == null ? '' : v).trim().toLowerCase();
+  if (/^[1-5](\.0+)?$/.test(t)) return Number(t);
+  if (t === 'c' || t === 'consolidation') return CONSOLIDATION;
+  if (t === 'r' || t === 'retired') return RETIRED;
+  return 0;
+}
+
+// A rank → what goes in the cell.
+function rankText_(rank) {
+  if (rank === CONSOLIDATION) return 'C';
+  if (rank === RETIRED) return 'R';
+  return rank || '';
+}
+
+// The `stage` the app posts (1–5 or "consolidation") → rank (0 if unusable).
+function resultRank_(v) {
+  const r = sheetRank_(v);
+  return r === RETIRED ? 0 : r;
+}
+
+// A Questions tab `stage` cell → the value for questions.json, or null.
+function exportStage_(v) {
+  const r = sheetRank_(v);
+  if (r >= 1 && r <= 5) return r;
+  if (r === CONSOLIDATION) return 'consolidation';
+  return null;
+}
+
+// Where a mistake goes after one answer at stage `at` (a rank, 1–6).
+// state = {stage, locked} (ranks; locked 0 = none). Returns the new state.
+//  - right at N (1–5): Stage N+1 (after 5, C); never moves a mistake back.
+//    A lock at or below N+1 is cleared, which covers "right at N−1 while
+//    Locked Stage = N → Stage N, lock cleared".
+//  - wrong at N (2–5): Stage N−1, Locked Stage N. Wrong at 1: stays at 1,
+//    no lock (there is nothing below to drop back to).
+//  - consolidation: Stage C, right or wrong; retiring is decided once all
+//    the mistake's consolidation questions are passed (see saveResults_).
+//  - a retired mistake stays retired.
+function nextStage_(state, at, right) {
+  const stage = state.stage, locked = state.locked;
+  if (stage === RETIRED) return { stage: stage, locked: 0 };
+  if (at === CONSOLIDATION) return { stage: CONSOLIDATION, locked: 0 };
+  if (right) {
+    return {
+      stage: Math.max(stage, at + 1),
+      locked: locked && locked <= at + 1 ? 0 : locked,
+    };
+  }
+  return at >= 2 ? { stage: at - 1, locked: at } : { stage: 1, locked: 0 };
+}
+
+// The stage a result was answered at. The app (from B26) posts `stage`, but
+// for a question written before the ladder (no `item` in the file, so the
+// app sends item = id) that stage is only guessed from the game, so the
+// mistake's own Stage is used instead; if that is blank too, phase 1 counts
+// as stage 1 and phase 2 as stage 2 (as "Move items onto the ladder" does).
+function answeredRank_(r, current) {
+  const ladderQuestion = r.item && String(r.item).trim() !== String(r.id).trim();
+  const posted = resultRank_(r.stage);
+  if (ladderQuestion && posted) return posted;
+  if (current >= 1 && current <= CONSOLIDATION) return current;
+  return Number(r.phase) === 2 ? 2 : 1;
+}
+
+// One-off (Spanish Games menu): puts every mistake with a blank Stage on the
+// ladder. Recall passed → R (already finished); Test 1 or Resit passed (so in
+// Recall) → 2; anything else (Test 1 or Resit still to pass) → 1. Mistakes
+// that already have a Stage are left alone, so running it twice is safe.
+function moveItemsOntoLadder() {
+  const book = book_();
+  const tz = book.getSpreadsheetTimeZone();
+  const text = v => text_(v, tz);
+  const sheet = book.getSheetByName(REVIEW_TAB);
+  const c = reviewColumns_(sheet);
+  if (!c.id) throw new Error('Test Review has no "Item ID" header');
+  const values = sheet.getDataRange().getValues();
+  const yes = (row, col) => col > 0 && /^yes$/i.test(text(row[col - 1]));
+  const counts = { 1: 0, 2: 0, R: 0, kept: 0 };
+  const column = [];
+  values.slice(1).forEach(row => {
+    const before = row[c.stage - 1];
+    if (!text(row[c.id - 1]) || sheetRank_(before)) {
+      if (text(row[c.id - 1])) counts.kept++;
+      column.push([before == null ? '' : before]);
+      return;
+    }
+    let stage;
+    if (yes(row, c.recallPassed)) stage = 'R';
+    else if (yes(row, c.test1Passed) || yes(row, c.resitPassed)) stage = 2;
+    else stage = 1;
+    counts[stage]++;
+    column.push([stage]);
+  });
+  if (column.length) sheet.getRange(2, c.stage, column.length, 1).setValues(column);
+  SpreadsheetApp.flush();
+  const message = 'Moved onto the ladder: ' + counts[1] + ' at stage 1, ' +
+    counts[2] + ' at stage 2, ' + counts.R + ' retired (recall already passed). ' +
+    counts.kept + ' already had a stage and were left as they were.';
+  console.log(message);
+  try { SpreadsheetApp.getUi().alert(message); } catch (err) { /* run from the editor */ }
+  return counts;
 }
 
 // What the Questions tab held at the last export, to skip unchanged tabs.
@@ -120,14 +247,19 @@ function exportQuestions(allowEmpty) {
   const text = v => text_(v, tz);
   const list = s => s ? s.split('|').map(x => x.trim()).filter(Boolean) : [];
 
-  // Items whose recall has been passed are left out, even if a row is still there.
+  // Retired items (Stage R) are left out, even if a row is still there. An
+  // item not yet on the ladder (blank Stage) counts as finished once its
+  // recall has been passed, as before the ladder.
   const finished = new Set();
   const review = book.getSheetByName(REVIEW_TAB);
   if (review) {
     const c = reviewColumns_(review);
-    if (c.id && c.recallPassed) {
+    if (c.id) {
       review.getDataRange().getValues().slice(1).forEach(row => {
-        if (/^yes$/i.test(text(row[c.recallPassed - 1]))) finished.add(text(row[c.id - 1]));
+        const rank = sheetRank_(row[c.stage - 1]);
+        const recallDone = c.recallPassed &&
+          /^yes$/i.test(text(row[c.recallPassed - 1]));
+        if (rank === RETIRED || (!rank && recallDone)) finished.add(text(row[c.id - 1]));
       });
     }
   }
@@ -145,13 +277,23 @@ function exportQuestions(allowEmpty) {
       return i < 0 ? '' : text(row[i]);
     };
     const id = get('id');
-    if (!id || finished.has(id)) return;
+    const item = get('item');
+    if (!id || finished.has(item || id)) return;
 
     const game = get('game');
     const q = { id: id };
+    // Stage ladder fields (B26 format), each left out when empty.
+    if (item) q.item = item;
+    const stage = exportStage_(get('stage'));
+    if (stage !== null) q.stage = stage;
     const phase = Number(get('phase'));
     if (phase === 1 || phase === 2) q.phase = phase;
     q.game = game;
+    const unlocksAfter = get('unlocks_after');
+    if (unlocksAfter) q.unlocks_after = unlocksAfter;
+    // `rule` is the rule bank ID, only meaningful on a Matching round.
+    const rule = get('rule');
+    if (rule && game === 'match') q.rule = rule;
     q.type = get('type') || 'grammar';
     q.category = get('category');
     q.prompt = get('prompt');
@@ -196,8 +338,10 @@ function exportQuestions(allowEmpty) {
 
 // ---------- Results from the app ----------
 
-// The app posts {"results": [{"id", "game", "phase", "right", "date"}]}.
-// Answers {"ok": true, "saved": [ids], "unknown": [ids with no row]}.
+// The app posts {"results": [{"id", "item", "stage", "game", "phase",
+// "right", "date", "hinted"?}]} (`item` and `stage` from B26; "right with a
+// hint" comes as right: false). Answers {"ok": true, "saved": [ids],
+// "unknown": [ids with no row]}.
 function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -228,9 +372,7 @@ function saveResults_(results) {
   const text = v => text_(v, tz);
   const sheet = book.getSheetByName(REVIEW_TAB);
   const c = reviewColumns_(sheet);
-  if (!c.id || !c.test1 || !c.needsResit || !c.resit || !c.recall) {
-    throw new Error('Test Review headers not found');
-  }
+  if (!c.id) throw new Error('Test Review headers not found');
 
   const values = sheet.getDataRange().getValues();
   const rowOf = new Map();
@@ -238,62 +380,86 @@ function saveResults_(results) {
     if (i > 0 && text(row[c.id - 1])) rowOf.set(text(row[c.id - 1]), i + 1);
   });
 
+  // The mistake's row: by `item`, else by `id`, else by `id` without a
+  // ladder suffix (FB-0012-s3 → FB-0012).
+  const findRow = r => {
+    const keys = [r.item, r.id, String(r.id || '').replace(/-s(c?\d+)$/i, '')]
+      .map(k => String(k || '').trim()).filter(Boolean);
+    for (const k of keys) if (rowOf.has(k)) return { key: k, row: rowOf.get(k) };
+    return null;
+  };
+
+  const state = new Map();  // row → {item, stage, locked, result, date}
   const saved = [], unknown = [], passed = new Set();
+  const consolidationPassed = new Set(); // items with a consolidation question right
   results.forEach(r => {
     const id = String(r.id || '').trim();
     const date = String(r.date || '').trim() ||
       Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    const row = rowOf.get(id);
-    if (!row) { unknown.push(id); return; }
-    const yesNo = r.right ? 'Yes' : 'No';
-    const cell = col => sheet.getRange(row, col);
-    const current = col => text(values[row - 1][col - 1]);
-
-    if (Number(r.phase) === 2) {
-      // Recall: the latest attempt wins; an earlier one on another day is
-      // kept as a note on its Passed cell.
-      const before = current(c.recall);
-      if (before && before !== date) {
-        const note = cell(c.recallPassed).getNote();
-        const line = before + ': ' + current(c.recallPassed);
-        cell(c.recallPassed).setNote(note ? note + '\n' + line : line);
-      }
-      cell(c.recall).setValue(date);
-      cell(c.recallPassed).setValue(yesNo);
-    } else {
-      // Phase 1: the first test, unless it was taken on an earlier day, in
-      // which case this is a resit. The same day again replaces that day's result.
-      const test1 = current(c.test1);
-      if (!test1 || test1 === date) {
-        cell(c.test1).setValue(date);
-        cell(c.test1Passed).setValue(yesNo);
-        cell(c.needsResit).setValue(r.right ? 'No' : 'Yes');
-      } else {
-        cell(c.resit).setValue(date);
-        cell(c.resitPassed).setValue(yesNo);
-        cell(c.needsResit).setValue(r.right ? 'No' : 'Yes');
-      }
-    }
-    cell(c.lastPractised).setValue(date);
+    const found = findRow(r);
+    if (!found) { unknown.push(id); return; }
+    const row = found.row;
+    const now = state.get(row) || {
+      item: found.key,
+      stage: sheetRank_(values[row - 1][c.stage - 1]),
+      locked: sheetRank_(values[row - 1][c.lockedStage - 1]),
+    };
+    const right = r.right === true || r.right === 'true';
+    const at = answeredRank_(r, now.stage);
+    const next = nextStage_(now, at, right);
+    now.stage = next.stage;
+    now.locked = next.locked;
+    now.result = right ? 'right' : 'wrong';
+    now.date = date;
+    state.set(row, now);
     saved.push(id);
-    if (r.right) passed.add(id);
+    if (right) {
+      passed.add(id);
+      if (at === CONSOLIDATION) consolidationPassed.add(now.item);
+    }
   });
 
   // A question answered right leaves the Questions tab, so it is not played
-  // again before ChatGPT writes its next step (recall, or nothing). Wrong
-  // ones stay.
-  if (passed.size) {
-    const tab = book.getSheetByName(TAB);
-    if (tab) {
-      const rows = tab.getDataRange().getValues();
-      const idCol = rows[0].map(h => String(h).trim().toLowerCase()).indexOf('id');
-      if (idCol >= 0) {
-        for (let i = rows.length - 1; i >= 1; i--) {
-          if (passed.has(text(rows[i][idCol]))) tab.deleteRow(i + 1);
+  // again before ChatGPT writes the next stage's question. Wrong ones stay.
+  // A mistake at C with a consolidation question passed and no consolidation
+  // question left in the tab is retired (R), and all its rows go.
+  const retired = new Set();
+  const tab = book.getSheetByName(TAB);
+  if (tab && (passed.size || consolidationPassed.size)) {
+    const rows = tab.getDataRange().getValues();
+    const head = rows[0].map(h => String(h).trim().toLowerCase());
+    const col = name => head.indexOf(name);
+    const idCol = col('id'), itemCol = col('item'), stageCol = col('stage'),
+      gameCol = col('game');
+    if (idCol >= 0) {
+      const itemOf = row => (itemCol >= 0 && text(row[itemCol])) || text(row[idCol]);
+      const isConsolidation = row => {
+        const rank = stageCol >= 0 ? sheetRank_(row[stageCol]) : 0;
+        if (rank) return rank === CONSOLIDATION;
+        const game = gameCol >= 0 ? text(row[gameCol]) : '';
+        return game === 'order' || game === 'match';
+      };
+      const remaining = rows.slice(1).filter(row => !passed.has(text(row[idCol])));
+      consolidationPassed.forEach(item => {
+        const left = remaining.some(row => itemOf(row) === item && isConsolidation(row));
+        if (!left) retired.add(item);
+      });
+      for (let i = rows.length - 1; i >= 1; i--) {
+        if (passed.has(text(rows[i][idCol])) || retired.has(itemOf(rows[i]))) {
+          tab.deleteRow(i + 1);
         }
       }
     }
   }
+
+  state.forEach((now, row) => {
+    if (retired.has(now.item) && now.stage === CONSOLIDATION) now.stage = RETIRED;
+    sheet.getRange(row, c.stage).setValue(rankText_(now.stage));
+    sheet.getRange(row, c.lockedStage).setValue(rankText_(now.locked));
+    sheet.getRange(row, c.lastResult).setValue(now.result);
+    sheet.getRange(row, c.lastPractised).setValue(now.date);
+  });
+
   SpreadsheetApp.flush();
   if (passed.size) exportQuestions(true);
   return { saved: saved, unknown: unknown };
