@@ -239,6 +239,109 @@ function rememberFingerprint_(values) {
     .setProperty('questionsFingerprint', fingerprint_(values));
 }
 
+// ---------- Sentence ordering window (B29) ----------
+
+// A Sentence ordering question longer than this many words shuffles only a
+// window of this size around the corrected words; the rest stays on screen
+// as fixed text (`fixed_start`, `fixed_end`).
+const ORDER_WINDOW = 8;
+
+// The words of a sentence, split on white space (as SentenceText.words).
+function words_(sentence) {
+  return String(sentence || '').trim().split(/\s+/).filter(Boolean);
+}
+
+// A word compared without case or edge punctuation, accents kept
+// (as SentenceText._key).
+function wordKey_(word) {
+  return word.toLowerCase().replace(/^[¿¡"«(]+|[.,;:!?"»)]+$/g, '');
+}
+
+// For each word of `target`, whether it is not part of the longest run of
+// words shared with `other` (the same comparison as SentenceText.diff).
+function changedWords_(target, other) {
+  const a = target.map(wordKey_);
+  const b = other.map(wordKey_);
+  const table = [];
+  for (let i = 0; i <= a.length; i++) table.push(new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      table[i][j] = a[i] === b[j]
+        ? table[i + 1][j + 1] + 1
+        : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  const kept = new Array(a.length).fill(false);
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      kept[i] = true;
+      i++;
+      j++;
+    } else if (table[i + 1][j] >= table[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return kept.map(k => !k);
+}
+
+// Picks the shuffled window for a Sentence ordering question. `prompt` is the
+// corrected sentence, `answers` the accepted sentences (the corrected one and
+// any alternatives) and `original` Andrew's sentence from the Questions tab's
+// `original` column. Returns null when the whole sentence is shuffled (8 words
+// or fewer, no original, or nothing changed), else {prompt, answers,
+// fixed_start, fixed_end}, where the prompt and each answer are only the
+// window. An alternative answer that does not share the fixed start and end
+// word for word is dropped. If the changed words span more than 8 words, the
+// window is the first 8 of them.
+function orderWindow_(prompt, answers, original) {
+  const w = words_(prompt);
+  if (w.length <= ORDER_WINDOW) return null;
+  const orig = words_(original);
+  if (!orig.length) return null;
+  const changed = changedWords_(w, orig);
+  const first = changed.indexOf(true);
+  if (first < 0) return null;
+  const last = changed.lastIndexOf(true);
+
+  let start;
+  const span = last - first + 1;
+  if (span >= ORDER_WINDOW) {
+    start = first;
+  } else {
+    const spare = ORDER_WINDOW - span;
+    start = first - Math.floor(spare / 2);
+  }
+  start = Math.max(0, Math.min(start, w.length - ORDER_WINDOW));
+  const end = start + ORDER_WINDOW; // first word after the window
+
+  const before = w.slice(0, start);
+  const after = w.slice(end);
+  const middle = sentence => {
+    const s = words_(sentence);
+    if (s.length <= before.length + after.length) return null;
+    for (let k = 0; k < before.length; k++) if (s[k] !== before[k]) return null;
+    for (let k = 0; k < after.length; k++) {
+      if (s[s.length - after.length + k] !== after[k]) return null;
+    }
+    return s.slice(before.length, s.length - after.length).join(' ');
+  };
+
+  const window = w.slice(start, end).join(' ');
+  const out = [window];
+  (answers || []).forEach(a => {
+    const m = middle(a);
+    if (m && out.indexOf(m) < 0) out.push(m);
+  });
+  const result = { prompt: window, answers: out };
+  if (before.length) result.fixed_start = before.join(' ');
+  if (after.length) result.fixed_end = after.join(' ');
+  return result;
+}
+
 // ---------- Questions tab → questions.json ----------
 
 function exportQuestions(allowEmpty) {
@@ -300,6 +403,17 @@ function exportQuestions(allowEmpty) {
     q.answers = game === 'match'
       ? list(get('answers')).map(p => p.split('=').map(x => x.trim()))
       : list(get('answers'));
+    // Sentence ordering: a long sentence shuffles only a window around the
+    // corrected words; the words before and after are shown as fixed text.
+    if (game === 'order') {
+      const win = orderWindow_(q.prompt, q.answers, get('original'));
+      if (win) {
+        q.prompt = win.prompt;
+        q.answers = win.answers;
+        if (win.fixed_start) q.fixed_start = win.fixed_start;
+        if (win.fixed_end) q.fixed_end = win.fixed_end;
+      }
+    }
     const options = list(get('options'));
     if (options.length) q.options = options;
     if (/^(true|yes)$/i.test(get('missing_word'))) q.missing_word = true;

@@ -93,6 +93,17 @@ The Questions tab may have the columns `item`, `stage` (1–5, or C /
 consolidation), `unlocks_after` and `rule` (Matching rows only); each is
 copied into `questions.json` when filled in. Retired mistakes are left out.
 
+Sentence ordering (from B29): an `order` row may also have an `original`
+column, Andrew's sentence before it was corrected (the `prompt` is the
+corrected sentence, as before). When the corrected sentence is longer than
+8 words, the script compares the two word by word (as the app's
+`SentenceText.changedRuns` does) and shuffles only a window of 8 words
+around the corrected words: the window becomes `prompt` and `answers`, the
+words before it `fixed_start` and the words after it `fixed_end`. An
+alternative answer is kept only if it has the same words before and after
+the window. With 8 words or fewer, no `original`, or nothing changed, the
+whole sentence is shuffled as now. `original` itself is not exported.
+
 To switch over: paste the script into the sheet and save, then run
 "Spanish Games → Move items onto the ladder" once. It gives every mistake
 with a blank Stage one: recall already passed → R, in Recall (Test 1 or
