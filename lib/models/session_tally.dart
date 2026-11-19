@@ -94,6 +94,11 @@ class SessionTally {
     sync?.add(entry);
   }
 
+  /// Whether the question [id] was answered right this session (its latest
+  /// result; a hinted Repair counts as not passed). Unlocks a drop-back
+  /// question's `unlocks_after` (B30).
+  bool passed(String id) => _results[id]?.right ?? false;
+
   /// Every question checked this session, in the order first checked, each
   /// with its latest result.
   List<TallyEntry> get entries => List.unmodifiable(_results.values);
