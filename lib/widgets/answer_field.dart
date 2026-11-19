@@ -16,6 +16,11 @@
 /// [AnswerFieldState.wrong]: the field is read-only, with a 2px mint or
 /// coral border and a tick or cross at the right.
 ///
+/// After a wrong first try that allows a second (Repair with a hint, B22)
+/// pass [AnswerFieldState.tryAgain]: the same 2px coral border and cross
+/// as [AnswerFieldState.wrong], but the field stays editable. The screen
+/// goes back to [AnswerFieldState.editing] once the text is changed.
+///
 /// Enter checks (section 10): the field does not take new lines; Enter
 /// calls [onSubmitted].
 library;
@@ -38,6 +43,10 @@ enum AnswerFieldState {
 
   /// After checking, wrong: read-only, 2px coral, cross.
   wrong,
+
+  /// A wrong first try with a second try to come: 2px coral, cross, still
+  /// editable (U18 fix, Andrew 2026-11-12).
+  tryAgain,
 }
 
 class AnswerField extends StatefulWidget {
@@ -128,7 +137,7 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
     }
     // Leaving the field once it is checked, so the keyboard closes and
     // focus can move on to "Next question".
-    if (widget.state != AnswerFieldState.editing && _focusNode.hasFocus) {
+    if (_checked && _focusNode.hasFocus) {
       _focusNode.unfocus();
     }
   }
@@ -146,14 +155,21 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
     }
   }
 
-  bool get _checked => widget.state != AnswerFieldState.editing;
+  /// Read-only: after the final check. [AnswerFieldState.tryAgain] stays
+  /// editable.
+  bool get _checked =>
+      widget.state == AnswerFieldState.correct ||
+      widget.state == AnswerFieldState.wrong;
 
   ({Color border, double width}) get _look => switch (widget.state) {
     AnswerFieldState.correct => (
       border: AppColors.correct,
       width: AppStroke.strong,
     ),
-    AnswerFieldState.wrong => (border: AppColors.wrong, width: AppStroke.strong),
+    AnswerFieldState.wrong || AnswerFieldState.tryAgain => (
+      border: AppColors.wrong,
+      width: AppStroke.strong,
+    ),
     AnswerFieldState.editing =>
       _focused
           ? (border: AppColors.accent, width: AppStroke.strong)
@@ -182,13 +198,14 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
 
     final icon = switch (widget.state) {
       AnswerFieldState.correct => Icons.check_rounded,
-      AnswerFieldState.wrong => Icons.close_rounded,
+      AnswerFieldState.wrong || AnswerFieldState.tryAgain => Icons.close_rounded,
       AnswerFieldState.editing => null,
     };
 
     final semanticLabel = switch (widget.state) {
       AnswerFieldState.correct => '${widget.semanticLabel}, correct',
       AnswerFieldState.wrong => '${widget.semanticLabel}, wrong',
+      AnswerFieldState.tryAgain => '${widget.semanticLabel}, wrong, try again',
       AnswerFieldState.editing => widget.semanticLabel,
     };
 
