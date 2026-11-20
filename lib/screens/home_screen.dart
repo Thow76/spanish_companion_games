@@ -1,11 +1,21 @@
-/// Home screen: the six games in two groups by phase, "New corrections"
-/// (phase 1) and "Recall" (phase 2), one card per game with the number of
-/// questions available for it, and a reload button in the top bar.
+/// Home screen: the six games in two groups on the stage ladder (B30),
+/// "Your mistakes" (Choose a correction, Fill the gap, Repair the sentence,
+/// Spot the error) and "Consolidation" (Sentence ordering, Matching), one
+/// card per game with the number of questions it plays now, and a reload
+/// button in the top bar.
+///
+/// Padlocks (B30, `ladder_locks.dart`): a question whose `unlocks_after`
+/// question has not yet been answered right this session is held back; a
+/// card with only held-back questions, or an empty card after an earlier
+/// stage that has questions, is locked, and tapping it shows the locked
+/// message. A card with open and held-back questions shows its open count
+/// and "n locked". Counts are worked out again on coming back from a game,
+/// so a stage unlocks straight away.
 ///
 /// A filter card above the groups (B12) narrows every game to one type
 /// (grammar errors or language notes), one phase, or one category, or any
 /// mix of the three; the card counts follow it, and choosing a phase shows
-/// only that phase's group. The filter is kept for the app session,
+/// only that phase's games. The filter is kept for the app session,
 /// including a reload.
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
@@ -20,7 +30,9 @@
 ///
 /// Look (U4, UI spec sections 5, 6 and 8): [HomeFrame] with [HomeTopBar],
 /// [PhaseHeading]s and [GameCard]s; phone one column, laptop a 2-column card
-/// grid per group with 32 between the groups.
+/// grid per group with 32 between the groups. The locked state and the
+/// "n locked" line are stand-ins (a dimmed [GameCard] and a caption line
+/// under the card) until the UI task's U19.
 library;
 
 import 'package:flutter/material.dart';
@@ -28,6 +40,7 @@ import 'package:flutter/material.dart';
 import '../data/drive_source.dart';
 import '../data/question_loader.dart';
 import '../data/results_sync.dart';
+import '../models/ladder_locks.dart';
 import '../models/question.dart';
 import '../models/question_filter.dart';
 import '../models/question_parser.dart';
@@ -135,38 +148,44 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openGame(GameType game, List<Question> questions) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => switch (game) {
-          // Every game has its own screen; each records its results in the
-          // session tally for the end-of-session summary (B7).
-          GameType.chooseCorrection => ChooseCorrectionScreen(
-            questions: questions,
-            session: _session,
+    Navigator.of(context)
+        .push<void>(
+          MaterialPageRoute(
+            builder: (_) => switch (game) {
+              // Every game has its own screen; each records its results in the
+              // session tally for the end-of-session summary (B7).
+              GameType.chooseCorrection => ChooseCorrectionScreen(
+                questions: questions,
+                session: _session,
+              ),
+              GameType.repair => RepairScreen(
+                questions: questions,
+                session: _session,
+              ),
+              GameType.fillGap => FillGapScreen(
+                questions: questions,
+                session: _session,
+              ),
+              GameType.order => OrderScreen(
+                questions: questions,
+                session: _session,
+              ),
+              GameType.match => MatchScreen(
+                questions: questions,
+                session: _session,
+              ),
+              GameType.spotError => SpotErrorScreen(
+                questions: questions,
+                session: _session,
+              ),
+            },
           ),
-          GameType.repair => RepairScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.fillGap => FillGapScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.order => OrderScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.match => MatchScreen(
-            questions: questions,
-            session: _session,
-          ),
-          GameType.spotError => SpotErrorScreen(
-            questions: questions,
-            session: _session,
-          ),
-        },
-      ),
-    );
+        )
+        // Back on home: a question answered right may have unlocked
+        // another (B30), so the counts and padlocks are worked out again.
+        .then((_) {
+          if (mounted) setState(() {});
+        });
   }
 
   @override
@@ -191,9 +210,15 @@ class _HomeScreenState extends State<HomeScreen> {
         // never leaves every game empty for a reason that can't be seen.
         final filter = _filter.keepingCategoryIn(parsed.questions);
         final shown = filter.apply(parsed.questions);
+        final cards = cardStates(
+          shown,
+          fileIds: {for (final q in parsed.questions) q.id},
+          passed: _session.passed,
+        );
         return _LoadedView(
           parsed: parsed,
           shown: shown,
+          cards: cards,
           filter: filter,
           onFilterChanged: (f) => setState(() => _filter = f),
           sourceLine: sourceLineText(
@@ -203,8 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           onReload: _reload,
           resultsSync: widget.resultsSync,
-          onGameSelected: (game) =>
-              _openGame(game, shown.where((q) => q.game == game).toList()),
+          // Only the questions open now (B30).
+          onGameSelected: (game) => _openGame(game, cards[game]!.open),
         );
       },
     );
@@ -271,6 +296,7 @@ class _LoadedView extends StatelessWidget {
   const _LoadedView({
     required this.parsed,
     required this.shown,
+    required this.cards,
     required this.filter,
     required this.onFilterChanged,
     required this.sourceLine,
@@ -283,6 +309,9 @@ class _LoadedView extends StatelessWidget {
 
   /// The questions that pass [filter], in file order.
   final List<Question> shown;
+
+  /// Each card's open questions and padlock (B30).
+  final Map<GameType, CardState> cards;
   final QuestionFilter filter;
   final ValueChanged<QuestionFilter> onFilterChanged;
   final String sourceLine;
@@ -292,20 +321,21 @@ class _LoadedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final counts = <GameType, int>{for (final g in GameType.values) g: 0};
-    for (final q in shown) {
-      counts[q.game] = counts[q.game]! + 1;
-    }
-    final showNew =
-        filter.phase == null || filter.phase == QuestionPhase.noticeAndCorrect;
-    final showRecall =
-        filter.phase == null || filter.phase == QuestionPhase.recall;
     final type = AppTypography.of(context);
     final laptop = FormFactor.of(context) == FormFactor.laptop;
 
-    Widget group(QuestionPhase phase) => _GameGroup(
-      games: GameType.forPhase(phase),
-      counts: counts,
+    // A chosen phase shows only that phase's games; a group left with no
+    // games is not shown.
+    List<GameType> gamesOf(HomeGroup group) => [
+      for (final g in group.games)
+        if (filter.phase == null || g.phase == filter.phase) g,
+    ];
+    final mistakes = gamesOf(HomeGroup.yourMistakes);
+    final consolidation = gamesOf(HomeGroup.consolidation);
+
+    Widget group(List<GameType> games) => _GameGroup(
+      games: games,
+      cards: cards,
       laptop: laptop,
       onGameSelected: onGameSelected,
     );
@@ -338,78 +368,134 @@ class _LoadedView extends StatelessWidget {
           const SizedBox(height: AppSpacing.s12),
           Text(_FilterCard.noMatchText, style: type.caption),
         ],
-        if (showNew) ...[
-          // Phase 1: Andrew's own sentences with the mistake marked.
-          const PhaseHeading.newCorrections(),
-          group(QuestionPhase.noticeAndCorrect),
+        if (mistakes.isNotEmpty) ...[
+          // Stages 1–5 of each mistake (B30).
+          PhaseHeading(
+            key: const ValueKey('home-group-your-mistakes'),
+            title: HomeGroup.yourMistakes.title,
+            description: HomeGroup.yourMistakes.description,
+            first: true,
+          ),
+          group(mistakes),
         ],
         // Laptop: 32 between the groups (the heading brings 24 of it).
-        if (laptop && showNew && showRecall)
+        if (laptop && mistakes.isNotEmpty && consolidation.isNotEmpty)
           const SizedBox(height: AppLayout.laptopGroupGap - AppSpacing.s24),
-        if (showRecall) ...[
-          // Phase 2: points already corrected, in new sentences.
-          const PhaseHeading.recall(),
-          group(QuestionPhase.recall),
+        if (consolidation.isNotEmpty) ...[
+          // After Stage 5 (B30).
+          PhaseHeading(
+            key: const ValueKey('home-group-consolidation'),
+            title: HomeGroup.consolidation.title,
+            description: HomeGroup.consolidation.description,
+            first: mistakes.isEmpty,
+          ),
+          group(consolidation),
         ],
       ],
     );
   }
 }
 
-/// The cards of one phase group, in home order: one column on phones, a
+/// The cards of one group, in home order: one column on phones, a
 /// 2-column grid on laptop (cards in a row share their height, so "Play →"
 /// lines up at the bottom).
+///
+/// B30: a locked card is a dimmed [GameCard] (as for 0 questions) that
+/// shows [lockedCardMessage] when tapped, with a "Locked" line under it; a
+/// part-locked card shows its open count and "n locked" under it.
+/// Stand-ins until U19.
 class _GameGroup extends StatelessWidget {
   const _GameGroup({
     required this.games,
-    required this.counts,
+    required this.cards,
     required this.laptop,
     required this.onGameSelected,
   });
 
   final List<GameType> games;
-  final Map<GameType, int> counts;
+  final Map<GameType, CardState> cards;
   final bool laptop;
   final ValueChanged<GameType> onGameSelected;
 
+  void _showLocked(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text(lockedCardMessage)));
+  }
+
+  /// One card with its lock line; [fill] lets the card take the cell's
+  /// height in the laptop grid.
+  Widget _cell(BuildContext context, GameType game, {required bool fill}) {
+    final state = cards[game]!;
+    final open = state.open.length;
+    Widget card = GameCard.forGame(
+      key: ValueKey('game-card-${game.jsonValue}'),
+      game: game.jsonValue,
+      count: open,
+      onTap: open > 0 ? () => onGameSelected(game) : null,
+    );
+    if (state.lock == CardLock.locked) {
+      final title = GameCard.copy[game.jsonValue]?.$1 ?? game.label;
+      // The dimmed card does not take taps itself, so they reach here.
+      card = Semantics(
+        key: ValueKey('game-card-locked-${game.jsonValue}'),
+        button: true,
+        label: '$title. Locked. $lockedCardMessage',
+        excludeSemantics: true,
+        onTap: () => _showLocked(context),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _showLocked(context),
+          child: card,
+        ),
+      );
+    }
+    final line = switch (state.lock) {
+      CardLock.locked => LockLine.lockedText,
+      CardLock.partLocked => LockLine.partText(state.locked),
+      _ => null,
+    };
+    if (line == null) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (fill) Expanded(child: card) else card,
+        LockLine(key: ValueKey('lock-line-${game.jsonValue}'), text: line),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cards = [
-      for (final game in games)
-        GameCard.forGame(
-          key: ValueKey('game-card-${game.jsonValue}'),
-          game: game.jsonValue,
-          count: counts[game] ?? 0,
-          onTap: (counts[game] ?? 0) > 0 ? () => onGameSelected(game) : null,
-        ),
-    ];
-
     if (!laptop) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < cards.length; i++) ...[
+          for (var i = 0; i < games.length; i++) ...[
             if (i > 0) const SizedBox(height: AppLayout.phoneCardGap),
-            cards[i],
+            _cell(context, games[i], fill: false),
           ],
         ],
       );
     }
 
+    final cells = [for (final game in games) _cell(context, game, fill: true)];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < cards.length; i += 2) ...[
+        for (var i = 0; i < cells.length; i += 2) ...[
           if (i > 0) const SizedBox(height: AppLayout.laptopCardGap),
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: cards[i]),
+                Expanded(child: cells[i]),
                 const SizedBox(width: AppLayout.laptopCardGap),
                 Expanded(
-                  child: i + 1 < cards.length
-                      ? cards[i + 1]
+                  child: i + 1 < cells.length
+                      ? cells[i + 1]
                       : const SizedBox.shrink(),
                 ),
               ],
@@ -417,6 +503,38 @@ class _GameGroup extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Under a locked or part-locked card (B30): a small padlock and "Locked"
+/// or "2 locked", muted caption. A stand-in until U19.
+class LockLine extends StatelessWidget {
+  const LockLine({super.key, required this.text});
+
+  final String text;
+
+  static const String lockedText = 'Locked';
+
+  /// "1 locked", "2 locked".
+  static String partText(int locked) => '$locked locked';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.s8, left: AppSpacing.s4),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.lock_outline_rounded,
+            size: AppSizes.iconSmall,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(width: AppSpacing.s4),
+          Flexible(child: Text(text, style: type.caption)),
+        ],
+      ),
     );
   }
 }

@@ -858,7 +858,7 @@ void main() {
       expect(questionFromJson(o).toJson(), o);
     });
 
-    test('a question locked behind a missing question is skipped', () {
+    test('a question locked behind a missing question is kept (B30)', () {
       final result = parseQuestionList([
         repair(overrides: {'id': 'FB-0012-s3', 'item': 'FB-0012'}),
         fillGap(
@@ -876,7 +876,7 @@ void main() {
             'unlocks_after': 'FB-0020-s1',
           },
         ),
-        // Locked behind the one above, which is skipped: skipped too.
+        // Locked behind the one above.
         spotError(
           overrides: {
             'id': 'FB-0020-s5',
@@ -885,10 +885,17 @@ void main() {
           },
         ),
       ]);
-      expect(result.questions.map((q) => q.id), ['FB-0012-s3', 'FB-0012-s4']);
-      expect(result.questions.last.unlocksAfter, 'FB-0012-s3');
-      expect(result.problems.map((p) => p.id), ['FB-0020-s2', 'FB-0020-s5']);
-      expect(result.problems.first.message, contains('"FB-0020-s1"'));
+      // Reload rule (Andrew, 2026-11-18): the script removes a question
+      // once it is answered right, so its unlocked follower must stay.
+      expect(result.questions.map((q) => q.id), [
+        'FB-0012-s3',
+        'FB-0012-s4',
+        'FB-0020-s2',
+        'FB-0020-s5',
+      ]);
+      expect(result.questions[1].unlocksAfter, 'FB-0012-s3');
+      expect(result.questions[2].unlocksAfter, 'FB-0020-s1');
+      expect(result.problems, isEmpty);
     });
 
     test('counts and groups by stage', () {
