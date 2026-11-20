@@ -211,6 +211,11 @@ class _AnswerFieldWidgetState extends State<AnswerField> {
 
     final field = FocusRing(
       radius: AppRadius.control,
+      // After a wrong first try the coral border and cross are the only
+      // outline (as mint and the tick are for a right answer); the field
+      // keeps focus for the second try, so the keyboard ring would add a
+      // second box round it (Andrew, PR #50, 2026-11-20).
+      show: widget.state != AnswerFieldState.tryAgain,
       child: AnimatedContainer(
         duration: AppMotion.duration(context),
         curve: AppMotion.curve,
