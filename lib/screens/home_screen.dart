@@ -18,6 +18,13 @@
 /// only that phase's games. The filter is kept for the app session,
 /// including a reload.
 ///
+/// Questions per round (B32): a 5 or 10 choice under the filter (default 5,
+/// kept for the app session, including a reload). Opening a card plays the
+/// first 5 or 10 of its open questions, oldest first (`round_size.dart`);
+/// the card's count stays the total open. "Finish" on the end-of-round
+/// summary comes back here and reloads the questions, as Reload does. The
+/// choice is a stand-in row of WordChips until the UI task's U22.
+///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
 /// Drive key and file ID (B8, wired up in `main.dart`).
@@ -44,6 +51,7 @@ import '../models/ladder_locks.dart';
 import '../models/question.dart';
 import '../models/question_filter.dart';
 import '../models/question_parser.dart';
+import '../models/round_size.dart';
 import '../models/session_tally.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_layout.dart';
@@ -56,6 +64,7 @@ import 'fill_gap_screen.dart';
 import 'match_screen.dart';
 import 'order_screen.dart';
 import 'repair_screen.dart';
+import 'session_summary_view.dart';
 import 'spot_error_screen.dart';
 
 /// Signature of the function that fetches and parses the question file.
@@ -109,6 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// What to play (B12). Kept when the questions are reloaded.
   QuestionFilter _filter = QuestionFilter.all;
 
+  /// Questions per round (B32). Kept when the questions are reloaded.
+  RoundSize _roundSize = RoundSize.standard;
+
   /// When the question file was last changed (B20), once known.
   DateTime? _updatedAt;
 
@@ -147,9 +159,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openGame(GameType game, List<Question> questions) {
+  /// Opens [game] with the first [_roundSize] of its open questions, oldest
+  /// first (B32).
+  void _openGame(GameType game, List<Question> open) {
+    final questions = pickRound(open, _roundSize);
     Navigator.of(context)
-        .push<void>(
+        .push<Object?>(
           MaterialPageRoute(
             builder: (_) => switch (game) {
               // Every game has its own screen; each records its results in the
@@ -183,8 +198,14 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         // Back on home: a question answered right may have unlocked
         // another (B30), so the counts and padlocks are worked out again.
-        .then((_) {
-          if (mounted) setState(() {});
+        // "Finish" on the summary (B32) also reloads the questions.
+        .then((result) {
+          if (!mounted) return;
+          if (result == RoundEnd.finish) {
+            _reload();
+          } else {
+            setState(() {});
+          }
         });
   }
 
@@ -221,6 +242,8 @@ class _HomeScreenState extends State<HomeScreen> {
           cards: cards,
           filter: filter,
           onFilterChanged: (f) => setState(() => _filter = f),
+          roundSize: _roundSize,
+          onRoundSizeChanged: (r) => setState(() => _roundSize = r),
           sourceLine: sourceLineText(
             parsed.questions.length,
             widget.sourceName,
@@ -299,6 +322,8 @@ class _LoadedView extends StatelessWidget {
     required this.cards,
     required this.filter,
     required this.onFilterChanged,
+    required this.roundSize,
+    required this.onRoundSizeChanged,
     required this.sourceLine,
     required this.onReload,
     required this.onGameSelected,
@@ -314,6 +339,8 @@ class _LoadedView extends StatelessWidget {
   final Map<GameType, CardState> cards;
   final QuestionFilter filter;
   final ValueChanged<QuestionFilter> onFilterChanged;
+  final RoundSize roundSize;
+  final ValueChanged<RoundSize> onRoundSizeChanged;
   final String sourceLine;
   final VoidCallback onReload;
   final ValueChanged<GameType> onGameSelected;
@@ -368,6 +395,9 @@ class _LoadedView extends StatelessWidget {
           const SizedBox(height: AppSpacing.s12),
           Text(_FilterCard.noMatchText, style: type.caption),
         ],
+        // Questions per round (B32).
+        const SizedBox(height: AppSpacing.s12),
+        RoundSizeChoice(value: roundSize, onChanged: onRoundSizeChanged),
         if (mistakes.isNotEmpty) ...[
           // Stages 1–5 of each mistake (B30).
           PhaseHeading(
@@ -503,6 +533,53 @@ class _GameGroup extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Questions per round (B32): "Questions per round" and a 5 / 10 choice, the
+/// chosen one highlighted. WordChips as in the filter card; a stand-in
+/// until U22.
+class RoundSizeChoice extends StatelessWidget {
+  const RoundSizeChoice({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final RoundSize value;
+  final ValueChanged<RoundSize> onChanged;
+
+  static const String label = 'Questions per round';
+
+  @override
+  Widget build(BuildContext context) {
+    final type = AppTypography.of(context);
+    return Semantics(
+      container: true,
+      label: label,
+      child: Wrap(
+        key: const ValueKey('home-round-size'),
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.s8,
+        runSpacing: AppSpacing.s8,
+        children: [
+          ExcludeSemantics(child: Text(label, style: type.caption)),
+          for (final size in RoundSize.values)
+            // At least as wide as it is high, so "5" is a 48×48 target.
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: AppSizes.wordChip),
+              child: WordChip(
+                key: ValueKey('round-size-${size.count}'),
+                label: size.label,
+                state: size == value
+                    ? WordChipState.placed
+                    : WordChipState.toPlace,
+                onPressed: size == value ? null : () => onChanged(size),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

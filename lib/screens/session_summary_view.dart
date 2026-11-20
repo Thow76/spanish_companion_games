@@ -37,6 +37,16 @@
 /// B22: a Repair question right only after the hint counts as not passed,
 /// so it is listed under "To look at again", with "Right with a hint" under
 /// its chip row.
+///
+/// B32: "Finish" goes back to home and reloads the questions (the same as
+/// Reload there), so questions the script has already taken out drop out
+/// and the counts are fresh. By default it closes the game's screen with
+/// [RoundEnd.finish], which home takes as "reload". "Play again" still
+/// replays the same questions. Placement is a stand-in until U22: beside
+/// "Play again" at the bottom on phones in portrait, in the list under the
+/// score in phone landscape (where "Play again" is the top-bar link), and
+/// under "Play again" in the laptop side panel; a secondary (outlined)
+/// button like "Copy results".
 library;
 
 import 'package:flutter/material.dart';
@@ -52,6 +62,10 @@ import '../theme/app_typography.dart';
 import '../theme/form_factor.dart';
 import '../widgets/widgets.dart';
 
+/// How a game's screen was closed from its summary (B32). Home reloads the
+/// questions on [finish]; a plain back (no value) leaves them as they are.
+enum RoundEnd { finish }
+
 class SessionSummaryView extends StatelessWidget {
   const SessionSummaryView({
     super.key,
@@ -62,6 +76,7 @@ class SessionSummaryView extends StatelessWidget {
     required this.onBack,
     this.session,
     this.hinted,
+    this.onFinish,
   });
 
   final GameType game;
@@ -83,6 +98,10 @@ class SessionSummaryView extends StatelessWidget {
   /// One entry per question in [questions]: right only after the hint
   /// (B22). Null for games without hints.
   final List<bool>? hinted;
+
+  /// "Finish" (B32). Null: close the game's screen with [RoundEnd.finish],
+  /// so home reloads the questions.
+  final VoidCallback? onFinish;
 
   static const String title = 'Session complete';
   static const String sessionHeading = 'All games so far';
@@ -115,11 +134,21 @@ class SessionSummaryView extends StatelessWidget {
     final type = AppTypography.of(context);
     final tally = session ?? SessionTally.fromRound(questions, results);
     final wrong = _wrong;
-    final laptop = FormFactor.of(context) == FormFactor.laptop;
+    final form = FormFactor.of(context);
+    final laptop = form == FormFactor.laptop;
+    final landscape = form == FormFactor.phoneLandscape;
+    final finish = FinishButton(
+      onPressed:
+          onFinish ??
+          () => Navigator.of(context).maybePop<RoundEnd>(RoundEnd.finish),
+    );
 
     final rows = <Widget>[
       Semantics(header: true, child: Text(title, style: type.cardTitle)),
       Text(scoreText(_score, questions.length), style: type.body),
+      // Phone landscape has no bottom button: "Play again" is the top-bar
+      // link, so Finish goes in the list (B32).
+      if (landscape) finish,
       _SessionScores(tally: tally),
       if (!laptop) CopyResultsButton(tally: tally),
       if (!laptop && tally.sync != null) ResultsSyncStatus(sync: tally.sync!),
@@ -174,8 +203,17 @@ class SessionSummaryView extends StatelessWidget {
         onAction: onPlayAgain,
       ),
       // On laptop the button goes in the side panel instead of under the
-      // list, so it is never below the fold.
-      primaryButton: laptop ? null : playAgain,
+      // list, so it is never below the fold. Phones: Finish beside it (B32).
+      primaryButton: laptop
+          ? null
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: finish),
+                const SizedBox(width: AppSpacing.s12),
+                Expanded(child: playAgain),
+              ],
+            ),
       sidePanel: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -183,6 +221,8 @@ class SessionSummaryView extends StatelessWidget {
           sessionPanel,
           const SizedBox(height: AppSpacing.s16),
           playAgain,
+          const SizedBox(height: AppSpacing.s12),
+          finish,
           const SizedBox(height: AppSpacing.s12),
           CopyResultsButton(tally: tally),
           if (tally.sync != null) ...[
@@ -192,6 +232,32 @@ class SessionSummaryView extends StatelessWidget {
         ],
       ),
       children: rows,
+    );
+  }
+}
+
+/// "Finish" (B32): back to home, which reloads the questions. A secondary
+/// (outlined) button in the theme's style, 52 high like the primary button,
+/// full width of where it is put. A stand-in until U22.
+class FinishButton extends StatelessWidget {
+  const FinishButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  static const String label = 'Finish';
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusRing(
+      radius: AppRadius.control,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSizes.primaryButton),
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.home_rounded, size: AppSizes.iconSmall),
+          label: const Text(label, textAlign: TextAlign.center),
+        ),
+      ),
     );
   }
 }
