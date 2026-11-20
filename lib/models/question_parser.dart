@@ -12,8 +12,9 @@
 /// `unlocks_after`, `fixed_start`/`fixed_end` (`order`) and `rule` (`match`:
 /// the rule bank ID). A missing `stage` is worked out from the game, and a
 /// missing `item` is the `id`, so older files still load. A `stage` that does
-/// not fit the game is reported and the question skipped, as is an
-/// `unlocks_after` that points at no question in the file.
+/// not fit the game is reported and the question skipped. An
+/// `unlocks_after` that points at no question in the file is kept (B30
+/// reload rule): the home screen treats it as unlocked.
 library;
 
 import 'dart:convert';
@@ -156,38 +157,15 @@ ParsedQuestions parseQuestionList(Object? decoded) {
     }
   }
 
-  // B26: a question locked behind another (`unlocks_after`) could never be
-  // unlocked if that question is not in the file, so it is skipped too.
-  // Repeated until nothing changes, in case the unlocking question was
-  // itself skipped for the same reason.
-  var kept = parsed;
-  while (true) {
-    final ids = {for (final (_, q) in kept) q.id};
-    final next = <(int, Question)>[];
-    for (final entry in kept) {
-      final (i, q) = entry;
-      final after = q.unlocksAfter;
-      if (after != null && !ids.contains(after)) {
-        problems.add(
-          QuestionProblem(
-            index: i,
-            id: q.id,
-            message:
-                '"unlocks_after" is "$after", but no question in the file '
-                'has that id',
-          ),
-        );
-      } else {
-        next.add(entry);
-      }
-    }
-    if (next.length == kept.length) break;
-    kept = next;
-  }
   problems.sort((a, b) => a.index.compareTo(b.index));
 
+  // B30 reload rule (Andrew, 2026-11-18): a question whose `unlocks_after`
+  // names a question no longer in the file is kept, not skipped. The script
+  // removes a question from the file once it is answered right, so after a
+  // reload the stage just unlocked would otherwise vanish. The home screen
+  // decides whether it is locked (`ladder_locks.dart`).
   return ParsedQuestions(
-    questions: [for (final (_, q) in kept) q],
+    questions: [for (final (_, q) in parsed) q],
     problems: problems,
   );
 }

@@ -85,16 +85,32 @@ void main() {
     expect(_countOn(GameType.fillGap, '2'), findsOneWidget);
   });
 
-  testWidgets('choosing a phase shows only that group', (tester) async {
+  testWidgets('choosing a phase shows only that phase\'s games', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
     await _openFilter(tester);
     await _tapVisible(tester, _chip('Phase', 'Recall'));
 
-    expect(find.byType(PhaseHeading), findsOneWidget);
+    // B30: the groups are Your mistakes and Consolidation; both still have
+    // Recall games (Fill the gap, Spot the error; Sentence ordering,
+    // Matching).
+    expect(find.byType(PhaseHeading), findsNWidgets(2));
     expect(find.byKey(const ValueKey('game-card-repair')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('game-card-choose_correction')),
+      findsNothing,
+    );
     expect(find.byKey(const ValueKey('game-card-fill_gap')), findsOneWidget);
+
+    // New corrections: Choose a correction and Repair only, so the
+    // Consolidation group goes.
+    await _tapVisible(tester, _chip('Phase', 'New corrections'));
+    expect(find.byType(PhaseHeading), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-card-repair')), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-card-order')), findsNothing);
   });
 
   testWidgets('a game opens with only the questions that pass', (tester) async {

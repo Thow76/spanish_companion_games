@@ -61,26 +61,39 @@ void main() {
     );
   });
 
-  testWidgets('games are grouped by phase, phase 1 first', (tester) async {
+  testWidgets('games are grouped on the ladder: Your mistakes, then '
+      'Consolidation (B30)', (tester) async {
     await tester.pumpWidget(_app(() async => _sample()));
     await tester.pumpAndSettle();
 
-    expect(find.text('New corrections'), findsOneWidget);
-    expect(find.text('Recall'), findsOneWidget);
+    expect(find.text('Your mistakes'), findsOneWidget);
+    expect(find.text('Consolidation'), findsOneWidget);
+    expect(find.text('New corrections'), findsNothing);
 
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
 
-    // Heading, its games, next heading, its games: top to bottom.
-    final newCorrections = top('New corrections');
-    final recall = top('Recall');
-    expect(newCorrections, lessThan(recall));
-    for (final game in GameType.forPhase(QuestionPhase.noticeAndCorrect)) {
-      expect(top(game.label), greaterThan(newCorrections));
-      expect(top(game.label), lessThan(recall));
+    // Heading, its games in ladder order, next heading, its games.
+    final mistakes = top('Your mistakes');
+    final consolidation = top('Consolidation');
+    expect(mistakes, lessThan(consolidation));
+    final order = [
+      GameType.chooseCorrection,
+      GameType.fillGap,
+      GameType.repair,
+      GameType.spotError,
+    ];
+    for (var i = 0; i < order.length; i++) {
+      expect(top(order[i].label), greaterThan(mistakes));
+      expect(top(order[i].label), lessThan(consolidation));
+      if (i > 0) {
+        expect(top(order[i].label), greaterThan(top(order[i - 1].label)));
+      }
     }
-    for (final game in GameType.forPhase(QuestionPhase.recall)) {
-      expect(top(game.label), greaterThan(recall));
-    }
+    expect(top(GameType.order.label), greaterThan(consolidation));
+    expect(
+      top(GameType.match.label),
+      greaterThan(top(GameType.order.label)),
+    );
   });
 
   testWidgets('a game with no questions is disabled', (tester) async {
