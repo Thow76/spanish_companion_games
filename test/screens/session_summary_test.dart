@@ -172,6 +172,83 @@ void main() {
     expect(played, 1);
   });
 
+  group('Finish (B32)', () {
+    testWidgets('on phones it sits beside Play again', (tester) async {
+      await tester.pumpWidget(
+        _app(_summary(questions: [_pensando()], results: [true])),
+      );
+      await tester.pumpAndSettle();
+
+      final finish = tester.getRect(find.byType(FinishButton));
+      final play = tester.getRect(
+        find.widgetWithText(PrimaryButton, 'Play again'),
+      );
+      expect(finish.right, lessThan(play.left));
+      expect(finish.top, closeTo(play.top, 1));
+    });
+
+    testWidgets('on laptop it sits in the side panel under Play again', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _app(_summary(questions: [_pensando()], results: [true])),
+      );
+      await tester.pumpAndSettle();
+
+      final finish = tester.getRect(find.byType(FinishButton));
+      final play = tester.getRect(
+        find.widgetWithText(PrimaryButton, 'Play again'),
+      );
+      expect(finish.top, greaterThan(play.bottom));
+      expect(finish.left, closeTo(play.left, 1));
+    });
+
+    testWidgets('in phone landscape it is in the list', (tester) async {
+      tester.view.physicalSize = const Size(844, 390);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _app(_summary(questions: [_pensando()], results: [true])),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FinishButton), findsOneWidget);
+    });
+
+    testWidgets('by default it closes the screen with RoundEnd.finish', (
+      tester,
+    ) async {
+      Object? result;
+      await tester.pumpWidget(
+        _app(
+          Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                result = await Navigator.of(context).push<Object?>(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        _summary(questions: [_pensando()], results: [true]),
+                  ),
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(FinishButton.label));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SessionSummaryView), findsNothing);
+      expect(result, RoundEnd.finish);
+    });
+  });
+
   testWidgets('a game screen records each check in the shared tally', (
     tester,
   ) async {
