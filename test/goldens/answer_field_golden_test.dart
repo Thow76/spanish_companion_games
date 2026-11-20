@@ -165,6 +165,7 @@ class _FieldGalleryState extends State<_FieldGallery> {
   late final _repairLong = _text(_longSentence);
   late final _repairRight = _text(_repairFixed);
   late final _repairWrongC = _text(_repairWrong);
+  late final _repairTryAgain = _text(_repairWrong);
 
   late final _gapEmpty = _text('');
   late final _gapTyped = _text('del');
@@ -241,6 +242,8 @@ class _FieldGalleryState extends State<_FieldGallery> {
         _repair(_repairRight, state: AnswerFieldState.correct),
         const _Label('Repair: checked, wrong'),
         _repair(_repairWrongC, state: AnswerFieldState.wrong),
+        const _Label('Repair: wrong first try, still editable (try again)'),
+        _repair(_repairTryAgain, state: AnswerFieldState.tryAgain),
 
         const _Label('Fill the gap, typed: empty'),
         _gap(_gapEmpty),

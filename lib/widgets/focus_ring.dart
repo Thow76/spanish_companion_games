@@ -11,9 +11,20 @@ import '../theme/app_spacing.dart';
 /// keyboard focus. The ring only shows when focus came from the keyboard
 /// (not after a tap or click).
 class FocusRing extends StatefulWidget {
-  const FocusRing({super.key, required this.child, this.radius = 12});
+  const FocusRing({
+    super.key,
+    required this.child,
+    this.radius = 12,
+    this.show = true,
+  });
 
   final Widget child;
+
+  /// False hides the ring even while focused, for a widget whose own border
+  /// already says what state it is in (AnswerField after a wrong first try,
+  /// where a second outline round the coral border reads as two boxes).
+  /// The widget tree stays the same, so focus and typing are not disturbed.
+  final bool show;
 
   /// Corner radius of [child]; the ring follows it, 4px further out.
   final double radius;
@@ -58,7 +69,7 @@ class _FocusRingState extends State<FocusRing> {
         fit: StackFit.passthrough,
         children: [
           widget.child,
-          if (_focused && _keyboard)
+          if (widget.show && _focused && _keyboard)
             Positioned(
               left: -outset,
               top: -outset,
