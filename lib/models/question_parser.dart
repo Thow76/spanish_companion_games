@@ -362,8 +362,9 @@ QuestionType _parseType(Map<dynamic, dynamic> raw) {
 }
 
 /// `options`: required for `choose_correction` (at least two), optional for
-/// `fill_gap`, not allowed elsewhere. Must include an accepted answer and,
-/// for `choose_correction`, must not include the marked words unchanged.
+/// `fill_gap`, not allowed elsewhere. Exactly one option must be an accepted
+/// answer ([optionsAnswerProblem], B33) and, for `choose_correction`, no
+/// option may be the marked words unchanged.
 List<String>? _parseOptions(
   Map<dynamic, dynamic> raw,
   GameType game,
@@ -397,11 +398,8 @@ List<String>? _parseOptions(
       'a choose_correction question needs at least two "options"',
     );
   }
-  if (!answers.any((a) => isAcceptedAnswer(a, options))) {
-    throw const FormatException(
-      '"options" must include at least one of the "answers"',
-    );
-  }
+  final problem = optionsAnswerProblem(options, answers);
+  if (problem != null) throw FormatException(problem);
   if (game == GameType.chooseCorrection) {
     final marked = [
       for (final run in promptRuns)
@@ -415,6 +413,32 @@ List<String>? _parseOptions(
   }
   return options;
 }
+
+/// One right option (B33, build plan 2026-11-20): of a question's [options],
+/// exactly one may match an accepted answer, compared with the answer-checking
+/// rule ([isAcceptedAnswer]: trim, ignore case and final punctuation, accents
+/// must match). `answers` may list other wordings, as long as none of them is
+/// among the options.
+///
+/// Returns null when exactly one option is right, otherwise the problem line
+/// for the skipped-questions notice, naming the options that matched.
+String? optionsAnswerProblem(List<String> options, List<String> answers) {
+  final right = [
+    for (final o in options)
+      if (isAcceptedAnswer(o, answers)) o,
+  ];
+  if (right.isEmpty) {
+    return '"options" must include one of the "answers"; none of '
+        '${_quoteList(options)} is an accepted answer';
+  }
+  if (right.length > 1) {
+    return '"options" must have exactly one right option, but '
+        '${right.length} are accepted answers: ${_quoteList(right)}';
+  }
+  return null;
+}
+
+String _quoteList(List<String> items) => items.map((s) => '"$s"').join(', ');
 
 List<MatchPair> _parsePairs(List<dynamic> rawAnswers) {
   final pairs = <MatchPair>[];

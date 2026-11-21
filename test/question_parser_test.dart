@@ -439,7 +439,7 @@ void main() {
               'options': ['de', 'a'],
             },
           ),
-          'at least one of the "answers"',
+          'must include one of the "answers"',
         ),
       );
       test(
@@ -926,6 +926,164 @@ void main() {
       expect(LadderStage.fromJson(0), isNull);
       expect(LadderStage.fromJson(null), isNull);
     });
+  });
+
+  group('one right option (B33)', () {
+    String? problemOf(Map<String, dynamic> raw) {
+      final result = parseQuestionList([raw]);
+      if (result.questions.isNotEmpty) return null;
+      expect(result.problems, hasLength(1));
+      return result.problems.single.message;
+    }
+
+    test('one matching option loads (choose_correction and fill_gap)', () {
+      expect(problemOf(chooseCorrection()), isNull);
+      expect(problemOf(fillGap()), isNull);
+    });
+
+    test('no matching option is reported and skipped, naming the options', () {
+      final message = problemOf(
+        fillGap(
+          overrides: {
+            'options': ['de', 'en', 'a'],
+          },
+        ),
+      );
+      expect(message, contains('must include one of the "answers"'));
+      expect(message, contains('"de", "en", "a"'));
+    });
+
+    test('two matching options are reported and skipped (fill_gap)', () {
+      final result = parseQuestionList([
+        fillGap(
+          overrides: {
+            'id': 'FB-0043',
+            'prompt': 'Este trabajo ___ mucha responsabilidad.',
+            'answers': ['implica', 'involucra'],
+            'options': ['implica', 'involucra', 'implican'],
+          },
+        ),
+      ]);
+      expect(result.questions, isEmpty);
+      expect(result.problems, hasLength(1));
+      final problem = result.problems.single;
+      expect(problem.id, 'FB-0043');
+      expect(problem.message, contains('exactly one right option'));
+      expect(problem.message, contains('2 are accepted answers'));
+      expect(problem.message, contains('"implica", "involucra"'));
+      expect(problem.message, isNot(contains('"implican"')));
+    });
+
+    test(
+      'two matching options are reported and skipped (choose_correction)',
+      () {
+        final message = problemOf(
+          chooseCorrection(
+            overrides: {
+              'answers': ['en', 'sobre'],
+              'options': ['en', 'sobre', 'a'],
+            },
+          ),
+        );
+        expect(message, contains('exactly one right option'));
+        expect(message, contains('"en", "sobre"'));
+      },
+    );
+
+    test('matching uses the answer-checking rule: case and final '
+        'punctuation ignored', () {
+      final message = problemOf(
+        fillGap(
+          overrides: {
+            'answers': ['del'],
+            'options': ['del', 'Del.', 'de'],
+          },
+        ),
+      );
+      expect(message, contains('exactly one right option'));
+      expect(message, contains('"del", "Del."'));
+    });
+
+    test('accents must match, so an unaccented option is a wrong one', () {
+      expect(
+        problemOf(
+          chooseCorrection(
+            overrides: {
+              'prompt': 'La sopa **es** muy caliente.',
+              'answers': ['está'],
+              'options': ['está', 'esta', 'estás'],
+            },
+          ),
+        ),
+        isNull,
+      );
+    });
+
+    test('other accepted wordings may stay in answers if not among the '
+        'options', () {
+      expect(
+        problemOf(
+          fillGap(
+            overrides: {
+              'answers': ['tranquilizar', 'calmar'],
+              'options': ['tranquilizar', 'tranquilizo', 'tranquila'],
+            },
+          ),
+        ),
+        isNull,
+      );
+    });
+
+    test('typed fill_gap (no options) is unchanged', () {
+      expect(
+        problemOf(
+          fillGap(
+            overrides: {
+              'answers': ['implica', 'involucra'],
+            },
+          )..remove('options'),
+        ),
+        isNull,
+      );
+    });
+
+    test('the other questions in the file still load', () {
+      final result = parseQuestionList([
+        chooseCorrection(),
+        fillGap(
+          overrides: {
+            'answers': ['del', 'de'],
+          },
+        ),
+      ]);
+      expect(result.questions.map((q) => q.id), ['2026-10-17-001']);
+      expect(result.problems.single.index, 1);
+    });
+
+    test('optionsAnswerProblem', () {
+      expect(optionsAnswerProblem(['en', 'a'], ['en']), isNull);
+      expect(optionsAnswerProblem(['de', 'a'], ['en']), isNotNull);
+      expect(optionsAnswerProblem(['en', 'En'], ['en']), isNotNull);
+    });
+
+    test(
+      'every options question in the bundled sample has one right option',
+      () {
+        final text = File('assets/questions.sample.json').readAsStringSync();
+        final result = parseQuestions(text);
+        final withOptions = result.questions.where(
+          (q) => q.options != null && q.options!.isNotEmpty,
+        );
+        expect(withOptions, isNotEmpty);
+        for (final q in withOptions) {
+          expect(
+            optionsAnswerProblem(q.options!, q.answers),
+            isNull,
+            reason: q.id,
+          );
+        }
+      },
+    );
   });
 
   group('answer checking', () {
