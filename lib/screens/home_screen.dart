@@ -23,7 +23,7 @@
 /// first 5 or 10 of its open questions, oldest first (`round_size.dart`);
 /// the card's count stays the total open. "Finish" on the end-of-round
 /// summary comes back here and reloads the questions, as Reload does. The
-/// choice is a stand-in row of WordChips until the UI task's U22.
+/// choice is a [RoundSizeCard] under the filter card (U22).
 ///
 /// The questions come from [HomeScreen.source]: the bundled sample file by
 /// default, or `questions.json` on Google Drive when the app is run with the
@@ -537,9 +537,8 @@ class _GameGroup extends StatelessWidget {
   }
 }
 
-/// Questions per round (B32): "Questions per round" and a 5 / 10 choice, the
-/// chosen one highlighted. WordChips as in the filter card; a stand-in
-/// until U22.
+/// Questions per round (B32): "Questions per round" and a 5 / 10 choice.
+/// Look from U22: the shared [RoundSizeCard].
 class RoundSizeChoice extends StatelessWidget {
   const RoundSizeChoice({
     super.key,
@@ -550,36 +549,17 @@ class RoundSizeChoice extends StatelessWidget {
   final RoundSize value;
   final ValueChanged<RoundSize> onChanged;
 
-  static const String label = 'Questions per round';
+  static const String label = RoundSizeCard.defaultLabel;
 
   @override
   Widget build(BuildContext context) {
-    final type = AppTypography.of(context);
-    return Semantics(
-      container: true,
-      label: label,
-      child: Wrap(
-        key: const ValueKey('home-round-size'),
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: AppSpacing.s8,
-        runSpacing: AppSpacing.s8,
-        children: [
-          ExcludeSemantics(child: Text(label, style: type.caption)),
-          for (final size in RoundSize.values)
-            // At least as wide as it is high, so "5" is a 48×48 target.
-            ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: AppSizes.wordChip),
-              child: WordChip(
-                key: ValueKey('round-size-${size.count}'),
-                label: size.label,
-                state: size == value
-                    ? WordChipState.placed
-                    : WordChipState.toPlace,
-                onPressed: size == value ? null : () => onChanged(size),
-              ),
-            ),
-        ],
-      ),
+    return RoundSizeCard(
+      key: const ValueKey('home-round-size'),
+      sizes: [for (final size in RoundSize.values) size.count],
+      value: value.count,
+      onChanged: (n) =>
+          onChanged(RoundSize.values.firstWhere((s) => s.count == n)),
+      buttonKey: (n) => ValueKey('round-size-$n'),
     );
   }
 }
