@@ -20,6 +20,7 @@ export 'phase_heading.dart';
 export 'primary_button.dart';
 export 'prompt_card.dart';
 export 'result_toast.dart';
+export 'round_size_card.dart';
 export 'screen_frames.dart';
 export 'sentence_text.dart';
 export 'spot_error_choice.dart';
