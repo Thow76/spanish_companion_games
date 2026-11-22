@@ -18,7 +18,16 @@
 /// on its word, then shuffled so they never start in the right order.
 /// Checking uses [isAcceptedAnswer] against `answers` (trim, ignore case
 /// and final punctuation, accents must match), so alternatives listed in
-/// `answers` are accepted. The session ends with the summary
+/// `answers` are accepted.
+///
+/// Long sentences (B31): when the question has `fixed_start` or
+/// `fixed_end` (filled in by the Apps Script, B29), only the window in
+/// `prompt` is split into chips, shuffled, placed and checked. The fixed
+/// text is shown as plain text before and after the chips, and the prompt
+/// card, "Corrected version" and "You wrote" show the whole sentence
+/// ([Question.withFixedEnds]). U20 does the look.
+///
+/// The session ends with the summary
 /// ([SessionSummaryView], B7); each check is recorded in the app session's
 /// tally.
 library;
@@ -153,8 +162,17 @@ class _OrderScreenState extends State<OrderScreen> {
   int get _total => _questions.length;
   bool get _isLast => _index == _total - 1;
 
-  /// The sentence as built so far.
+  /// The window as built so far (the words placed, in order).
   String get _built => _placed.map((i) => _words[i]).join(' ');
+
+  /// The whole sentence as built so far: [_built] with the question's
+  /// fixed start and end around it (B31). Same as [_built] when it has
+  /// none.
+  String get _builtSentence => _question.withFixedEnds(_built);
+
+  /// The first accepted sentence, whole, with the fixed start and end.
+  String get _acceptedSentence =>
+      _question.withFixedEnds(OrderScreen.acceptedOf(_question).first);
 
   bool get _canCheck =>
       !_checked && _words.isNotEmpty && _placed.length == _words.length;
@@ -254,9 +272,15 @@ class _OrderScreenState extends State<OrderScreen> {
     rule: q.rule,
     meaning: q.meaning,
     answers: q.answers,
-    typed: _correct ? null : _built,
-    typedAgainst: _correct ? null : OrderScreen.acceptedOf(q).first,
+    typed: _correct ? null : _builtSentence,
+    typedAgainst: _correct ? null : _acceptedSentence,
   );
+
+  /// [text] trimmed, or null when it is null or blank.
+  static String? _nonEmpty(String? text) {
+    final t = text?.trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
 
   List<QuestionMark> get _marks => [
     for (var i = 0; i < _total; i++)
@@ -287,6 +311,8 @@ class _OrderScreenState extends State<OrderScreen> {
     final type = AppTypography.of(context);
     final q = _question;
     final content = _checked ? _explanation(q) : null;
+    final fixedStart = _nonEmpty(q.fixedStart);
+    final fixedEnd = _nonEmpty(q.fixedEnd);
 
     final rows = <Widget>[
       if (laptop)
@@ -306,21 +332,34 @@ class _OrderScreenState extends State<OrderScreen> {
       // with the first accepted sentence and the moved words in mint.
       PromptCard.plain(
         key: ValueKey('order-card-${q.id}'),
-        sentence: _built,
-        corrected: _checked && !_correct
-            ? OrderScreen.acceptedOf(q).first
-            : null,
+        sentence: _builtSentence,
+        corrected: _checked && !_correct ? _acceptedSentence : null,
       ),
+      // The chips; a long sentence's fixed start and end (B31) sit before
+      // and after them as plain text, which cannot be tapped or moved.
       Wrap(
         spacing: AppSpacing.s8,
         runSpacing: AppSpacing.s8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          if (fixedStart != null)
+            Text(
+              fixedStart,
+              key: ValueKey('order-fixed-start-${q.id}'),
+              style: type.option,
+            ),
           for (var i = 0; i < _words.length; i++)
             WordChip(
               key: ValueKey('order-word-${q.id}-$i'),
               label: _words[i],
               state: _stateOf(i),
               onPressed: _checked ? null : () => _tapWord(i),
+            ),
+          if (fixedEnd != null)
+            Text(
+              fixedEnd,
+              key: ValueKey('order-fixed-end-${q.id}'),
+              style: type.option,
             ),
         ],
       ),
