@@ -577,7 +577,9 @@ class _WrongQuestion extends StatelessWidget {
         fill: first,
         gapState: first == null ? GapState.empty : GapState.correct,
       ),
-      GameType.order => PromptCard.plain(sentence: first ?? q.promptText),
+      GameType.order => PromptCard.plain(
+        sentence: q.withFixedEnds(first ?? q.promptText),
+      ),
       GameType.spotError => PromptCard.plain(
         sentence: q.promptText,
         corrected: spotErrorSentenceIsCorrect(q) ? null : first,

@@ -312,6 +312,20 @@ class Question {
   /// words.
   final String? fixedEnd;
 
+  /// Whether this question has a [fixedStart] or [fixedEnd] (B31).
+  bool get hasFixedEnds =>
+      (fixedStart?.trim().isNotEmpty ?? false) ||
+      (fixedEnd?.trim().isNotEmpty ?? false);
+
+  /// [window] with [fixedStart] before it and [fixedEnd] after it, joined
+  /// by single spaces (B31): the whole sentence of a long Sentence ordering
+  /// question. Empty parts are left out, so with neither it is [window].
+  String withFixedEnds(String window) => [
+    fixedStart,
+    window,
+    fixedEnd,
+  ].map((s) => s?.trim() ?? '').where((s) => s.isNotEmpty).join(' ');
+
   /// `match` only, optional (B26): the rule bank ID the round was made
   /// from, e.g. `subj-esperar`. Read from the file's `rule` field on a
   /// `match` question; on the other games `rule` is the display rule

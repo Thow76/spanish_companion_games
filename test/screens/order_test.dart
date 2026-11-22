@@ -41,6 +41,25 @@ Question _nadie() => Question(
       'direct pronoun',
 );
 
+// A long sentence with a fixed start and end (B31), as the Apps Script
+// writes it (B29): only the window in `prompt` is shuffled.
+Question _llaves() => Question(
+  id: 'llaves',
+  game: GameType.order,
+  category: 'Prepositions',
+  type: QuestionType.grammar,
+  prompt: 'me di cuenta de que había olvidado',
+  answers: const ['me di cuenta de que había olvidado'],
+  fixedStart: 'Cuando llegué a casa anoche,',
+  fixedEnd: 'las llaves en el trabajo.',
+  explanation: 'darse cuenta de que = to realise that',
+);
+
+const _llavesRight = ['me', 'di', 'cuenta', 'de', 'que', 'había', 'olvidado'];
+const _llavesWrong = ['me', 'di', 'cuenta', 'que', 'de', 'había', 'olvidado'];
+const _llavesStart = 'Cuando llegué a casa anoche,';
+const _llavesEnd = 'las llaves en el trabajo.';
+
 Widget _app(Widget home) => MaterialApp(
   theme: appTheme(FormFactor.phone),
   builder: (context, child) => Theme(
@@ -235,5 +254,99 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Question 1 of 1'), findsOneWidget);
+  });
+
+  group('fixed start and end (B31)', () {
+    testWidgets('only the window is chips; the fixed text is plain text', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(_screen([_llaves()])));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WordChip), findsNWidgets(7));
+      expect(find.widgetWithText(WordChip, 'Cuando'), findsNothing);
+      expect(find.widgetWithText(WordChip, 'llaves'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('order-fixed-start-llaves')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('order-fixed-end-llaves')),
+        findsOneWidget,
+      );
+      expect(find.text(_llavesStart), findsOneWidget);
+      expect(find.text(_llavesEnd), findsOneWidget);
+      // Nothing placed yet: the card shows the fixed text around the gap.
+      expect(_card(tester).sentence, '$_llavesStart $_llavesEnd');
+    });
+
+    testWidgets('the card shows the whole sentence as it is built', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(_screen([_llaves()])));
+      await tester.pumpAndSettle();
+
+      await _tapWords(tester, ['me', 'di']);
+      expect(_card(tester).sentence, '$_llavesStart me di $_llavesEnd');
+      expect(_button(tester).onPressed, isNull);
+      await _tapWords(tester, _llavesRight.skip(2).toList());
+      expect(_button(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('tapping the fixed text does nothing', (tester) async {
+      await tester.pumpWidget(_app(_screen([_llaves()])));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(_llavesStart));
+      await tester.pumpAndSettle();
+      expect(_card(tester).sentence, '$_llavesStart $_llavesEnd');
+    });
+
+    testWidgets('the window in order is right', (tester) async {
+      await tester.pumpWidget(_app(_screen([_llaves()])));
+      await tester.pumpAndSettle();
+
+      await _tapWords(tester, _llavesRight);
+      await tester.tap(find.text('Check'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text(ResultToast.correctText), findsOneWidget);
+      expect(_card(tester).corrected, isNull);
+      await _letToastGo(tester);
+    });
+
+    testWidgets('wrong: corrected version is the whole sentence', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_app(_screen([_llaves()])));
+      await tester.pumpAndSettle();
+
+      await _tapWords(tester, _llavesWrong);
+      await tester.tap(find.text('Check'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text(ResultToast.wrongText), findsOneWidget);
+      expect(
+        _card(tester).sentence,
+        '$_llavesStart me di cuenta que de había olvidado $_llavesEnd',
+      );
+      expect(
+        _card(tester).corrected,
+        '$_llavesStart me di cuenta de que había olvidado $_llavesEnd',
+      );
+      expect(find.text('You wrote'), findsOneWidget);
+      await _letToastGo(tester);
+    });
+
+    test('withFixedEnds joins the parts and leaves out empty ones', () {
+      final q = _llaves();
+      expect(q.hasFixedEnds, isTrue);
+      expect(q.withFixedEnds('x y'), '$_llavesStart x y $_llavesEnd');
+      expect(q.withFixedEnds(''), '$_llavesStart $_llavesEnd');
+      expect(_nadie().hasFixedEnds, isFalse);
+      expect(_nadie().withFixedEnds('a b'), 'a b');
+    });
   });
 }
