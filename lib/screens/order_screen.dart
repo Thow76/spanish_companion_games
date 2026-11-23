@@ -25,7 +25,8 @@
 /// `prompt` is split into chips, shuffled, placed and checked. The fixed
 /// text is shown as plain text before and after the chips, and the prompt
 /// card, "Corrected version" and "You wrote" show the whole sentence
-/// ([Question.withFixedEnds]). U20 does the look.
+/// ([Question.withFixedEnds]). Look (U20): [FixedWords] among the chips,
+/// and the card's fixed text muted with a gap slot for the window.
 ///
 /// The session ends with the summary
 /// ([SessionSummaryView], B7); each check is recorded in the app session's
@@ -334,19 +335,26 @@ class _OrderScreenState extends State<OrderScreen> {
         key: ValueKey('order-card-${q.id}'),
         sentence: _builtSentence,
         corrected: _checked && !_correct ? _acceptedSentence : null,
+        // A long sentence (B31): the fixed text muted, a gap slot where the
+        // words still go (look U20).
+        fixedStart: fixedStart,
+        fixedEnd: fixedEnd,
+        window: _built,
+        windowComplete: _placed.length == _words.length,
       ),
       // The chips; a long sentence's fixed start and end (B31) sit before
-      // and after them as plain text, which cannot be tapped or moved.
+      // and after them as FixedWords: muted text with no box, which cannot
+      // be tapped or moved (look U20).
       Wrap(
         spacing: AppSpacing.s8,
         runSpacing: AppSpacing.s8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (fixedStart != null)
-            Text(
-              fixedStart,
+            FixedWords(
               key: ValueKey('order-fixed-start-${q.id}'),
-              style: type.option,
+              text: fixedStart,
+              place: FixedWordsPlace.start,
             ),
           for (var i = 0; i < _words.length; i++)
             WordChip(
@@ -356,10 +364,10 @@ class _OrderScreenState extends State<OrderScreen> {
               onPressed: _checked ? null : () => _tapWord(i),
             ),
           if (fixedEnd != null)
-            Text(
-              fixedEnd,
+            FixedWords(
               key: ValueKey('order-fixed-end-${q.id}'),
-              style: type.option,
+              text: fixedEnd,
+              place: FixedWordsPlace.end,
             ),
         ],
       ),

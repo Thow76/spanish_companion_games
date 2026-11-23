@@ -49,6 +49,10 @@ class PromptCard extends StatelessWidget {
     this.fill,
     this.gapState = GapState.empty,
   }) : _form = _Form.gap,
+       fixedStart = null,
+       fixedEnd = null,
+       window = '',
+       windowComplete = false,
        missingWord = false,
        replacement = null,
        corrected = null,
@@ -72,6 +76,10 @@ class PromptCard extends StatelessWidget {
     this.replacement,
     this.corrected,
   }) : _form = _Form.marked,
+       fixedStart = null,
+       fixedEnd = null,
+       window = '',
+       windowComplete = false,
        fill = null,
        gapState = GapState.empty,
        field = null,
@@ -80,14 +88,31 @@ class PromptCard extends StatelessWidget {
   /// Sentence ordering: the sentence only, no label, nothing marked. If
   /// [corrected] is passed and differs from the sentence, the card shows
   /// "Corrected version" with the changed words in `correct`.
-  const PromptCard.plain({super.key, required this.sentence, this.corrected})
-    : _form = _Form.plain,
-      fill = null,
-      gapState = GapState.empty,
-      missingWord = false,
-      replacement = null,
-      field = null,
-      choice = null;
+  ///
+  /// A long sentence with a fixed start or end (B31, look U20): pass
+  /// [fixedStart] and/or [fixedEnd] and the words placed so far as
+  /// [window]. Before checking, the card then shows the fixed text in
+  /// `textMuted`, the placed words in `textPrimary`, and, while words are
+  /// still to place ([windowComplete] false), an empty gap slot after the
+  /// placed words (the Fill the gap slot), so it is clear where the words
+  /// go. [sentence] is still the whole sentence as built; it is what a
+  /// screen reader hears (with "blank" for the slot) and what [corrected]
+  /// is compared with.
+  const PromptCard.plain({
+    super.key,
+    required this.sentence,
+    this.corrected,
+    this.fixedStart,
+    this.fixedEnd,
+    this.window = '',
+    this.windowComplete = false,
+  }) : _form = _Form.plain,
+       fill = null,
+       gapState = GapState.empty,
+       missingWord = false,
+       replacement = null,
+       field = null,
+       choice = null;
 
   /// Spot the error (section 6, redesigned 2026-10-30).
   ///
@@ -108,6 +133,10 @@ class PromptCard extends StatelessWidget {
     this.field,
     this.corrected,
   }) : _form = _Form.spotError,
+       fixedStart = null,
+       fixedEnd = null,
+       window = '',
+       windowComplete = false,
        fill = null,
        gapState = GapState.empty,
        missingWord = false,
@@ -122,6 +151,14 @@ class PromptCard extends StatelessWidget {
   final String? corrected;
   final Widget? field;
   final Widget? choice;
+  final String? fixedStart;
+  final String? fixedEnd;
+  final String window;
+  final bool windowComplete;
+
+  bool get _hasFixedEnds =>
+      (fixedStart?.trim().isNotEmpty ?? false) ||
+      (fixedEnd?.trim().isNotEmpty ?? false);
 
   /// The label above the Spot the error field (section 8).
   static const String fixLabel = 'Fix the sentence';
@@ -168,7 +205,11 @@ class PromptCard extends StatelessWidget {
               ..add(Text(missingWordText, style: type.caption));
           }
         case _Form.plain:
-          children.add(Text(original, style: type.prompt, softWrap: true));
+          children.add(
+            _hasFixedEnds && corrected == null
+                ? _ordering(type)
+                : Text(original, style: type.prompt, softWrap: true),
+          );
         case _Form.spotError:
           if (field != null) {
             children
@@ -318,6 +359,60 @@ class PromptCard extends StatelessWidget {
     }
     return Semantics(
       label: '$originalLabel: ${spoken.where((s) => s.isNotEmpty).join(', ')}',
+      child: ExcludeSemantics(
+        child: Text.rich(
+          TextSpan(style: type.prompt, children: spans),
+          softWrap: true,
+        ),
+      ),
+    );
+  }
+
+  /// Sentence ordering with a fixed start or end (U20), before checking:
+  /// the fixed text muted, the placed words in `textPrimary`, and an empty
+  /// gap slot after them while words are still to place.
+  Widget _ordering(AppTypography type) {
+    final start = fixedStart?.trim() ?? '';
+    final end = fixedEnd?.trim() ?? '';
+    final placed = window.trim();
+    final fixedStyle = type.prompt.copyWith(color: AppColors.textMuted);
+    final spans = <InlineSpan>[];
+    final spoken = <String>[];
+    if (start.isNotEmpty) {
+      spans.add(TextSpan(text: '$start ', style: fixedStyle));
+      spoken.add(start);
+    }
+    if (placed.isNotEmpty) {
+      spans.add(
+        TextSpan(
+          text: windowComplete ? placed : '$placed ',
+          style: type.prompt.copyWith(color: AppColors.textPrimary),
+        ),
+      );
+      spoken.add(placed);
+    }
+    if (!windowComplete) {
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: _InlineHighlight(
+            fill: AppColors.accent12,
+            underline: AppColors.accent,
+            minWidth: AppSizes.gapSlotMinWidth,
+            // A non-breaking space keeps the empty slot one line high.
+            child: Text('\u00A0', style: type.promptStrong),
+          ),
+        ),
+      );
+      spoken.add('blank');
+    }
+    if (end.isNotEmpty) {
+      spans.add(TextSpan(text: ' $end', style: fixedStyle));
+      spoken.add(end);
+    }
+    return Semantics(
+      label: spoken.join(' '),
       child: ExcludeSemantics(
         child: Text.rich(
           TextSpan(style: type.prompt, children: spans),

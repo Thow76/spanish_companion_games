@@ -9,6 +9,7 @@ export 'chips.dart';
 export 'dashed_border.dart';
 export 'explanation_card.dart';
 export 'explanation_content.dart';
+export 'fixed_words.dart';
 export 'focus_ring.dart';
 export 'game_card.dart';
 export 'game_icon.dart';
