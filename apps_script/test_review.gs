@@ -2,6 +2,8 @@
 //  - As soon as the "Questions" tab changes (and every hour as a fallback,
 //    and from the Spanish Games menu): the tab becomes questions.json on
 //    Drive, which the app reads. Run setUpTriggers() once to switch this on.
+//    Matching rounds made from the rule bank are checked against the
+//    "Rules" tab on the way, and a round that fails is left out.
 //  - Results: the app sends each answer here (deployed as a web app) and
 //    the script moves the mistake along the stage ladder in Test Review
 //    (Stage, Locked Stage, Last Result, Last Practised).
@@ -342,6 +344,89 @@ function orderWindow_(prompt, answers, original) {
   return result;
 }
 
+// ---------- Matching rounds and the rule bank (B28) ----------
+
+const RULES_TAB = 'Rules'; // one row per slot: Rule ID, Rule name, Slot,
+                           // What the slot needs, Approved starts, Fixed answer
+
+// Compares starts and answers: spaces trimmed and collapsed, case ignored,
+// accents kept (as the app's answer checking).
+function ruleKey_(s) {
+  return String(s == null ? '' : s).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Turns the Rules tab's rows (header first) into
+// {ruleId: {name, slots: [{slot, needs, starts: [keys], fixed: key|''}]}}.
+// Columns found by header name. Rows without a Rule ID are ignored.
+function parseRules_(values) {
+  const rules = {};
+  if (!values || !values.length) return rules;
+  const head = values[0].map(h => ruleKey_(h));
+  const col = name => head.indexOf(name);
+  const c = {
+    id: col('rule id'), name: col('rule name'), slot: col('slot'),
+    needs: col('what the slot needs'), starts: col('approved starts'),
+    fixed: col('fixed answer'),
+  };
+  if (c.id < 0 || c.starts < 0) return rules;
+  const cell = (row, i) => i < 0 ? '' : String(row[i] == null ? '' : row[i]).trim();
+  values.slice(1).forEach(row => {
+    const id = cell(row, c.id);
+    if (!id) return;
+    const rule = rules[id] || (rules[id] = { name: cell(row, c.name), slots: [] });
+    rule.slots.push({
+      slot: cell(row, c.slot) || String(rule.slots.length + 1),
+      needs: cell(row, c.needs),
+      starts: cell(row, c.starts).split('|').map(ruleKey_).filter(Boolean),
+      fixed: ruleKey_(cell(row, c.fixed)),
+    });
+  });
+  return rules;
+}
+
+// Reads the Rules tab; null if the tab is missing.
+function readRules_(book) {
+  const sheet = book.getSheetByName(RULES_TAB);
+  if (!sheet) return null;
+  return parseRules_(sheet.getDataRange().getValues());
+}
+
+// Checks a Matching round against its rule. `pairs` is [[start, answer], …].
+// Returns '' when the round is fine, else why it fails: an unknown rule, a
+// pair that is not two parts, a start in no slot's list, two pairs for one
+// slot, a slot with no pair, an answer that is not the slot's Fixed answer,
+// or two answers the same.
+function checkMatchRound_(ruleId, pairs, rules) {
+  const rule = rules[ruleId];
+  if (!rule) return 'rule "' + ruleId + '" is not in the Rules tab';
+  if (!Array.isArray(pairs) || !pairs.length) return 'it has no pairs';
+  const used = new Set();
+  const answers = new Set();
+  for (let i = 0; i < pairs.length; i++) {
+    const p = pairs[i];
+    if (!Array.isArray(p) || p.length !== 2 || !ruleKey_(p[0]) || !ruleKey_(p[1])) {
+      return 'pair ' + (i + 1) + ' is not "start = answer"';
+    }
+    const start = ruleKey_(p[0]);
+    const answer = ruleKey_(p[1]);
+    const slots = rule.slots.filter(s => s.starts.indexOf(start) >= 0);
+    if (!slots.length) return '"' + p[0] + '" is not an approved start for ' + ruleId;
+    const slot = slots.filter(s => !used.has(s))[0];
+    if (!slot) return 'two pairs use slot ' + slots[0].slot + ' ("' + p[0] + '")';
+    used.add(slot);
+    if (slot.fixed && answer !== slot.fixed) {
+      return '"' + p[0] + '" should be matched with "' + slot.fixed + '", not "' + p[1] + '"';
+    }
+    if (answers.has(answer)) return 'the answer "' + p[1] + '" appears twice';
+    answers.add(answer);
+  }
+  const missing = rule.slots.filter(s => !used.has(s));
+  if (missing.length) {
+    return 'no pair for slot ' + missing.map(s => s.slot).join(', ');
+  }
+  return '';
+}
+
 // ---------- Questions tab → questions.json ----------
 
 function exportQuestions(allowEmpty) {
@@ -349,6 +434,8 @@ function exportQuestions(allowEmpty) {
   const tz = book.getSpreadsheetTimeZone();
   const text = v => text_(v, tz);
   const list = s => s ? s.split('|').map(x => x.trim()).filter(Boolean) : [];
+  const rules = readRules_(book); // null: no Rules tab, rounds not checked
+  let rulesWarned = false;
 
   // Retired items (Stage R) are left out, even if a row is still there. An
   // item not yet on the ladder (blank Stage) counts as finished once its
@@ -426,7 +513,23 @@ function exportQuestions(allowEmpty) {
     q.source = get('source');
     q.added = get('added');
 
+    // Matching rounds made from the rule bank are checked against the Rules
+    // tab; a round that fails is left out (and an older row for the same id
+    // does not come back). A round without a rule ID is kept as before.
     byId.delete(id);
+    if (game === 'match' && q.rule) {
+      if (!rules) {
+        if (!rulesWarned) console.log('No "' + RULES_TAB + '" tab, so Matching rounds were not checked.');
+        rulesWarned = true;
+      } else {
+        const why = checkMatchRound_(q.rule, q.answers, rules);
+        if (why) {
+          console.log('Left out Matching round ' + id + ': ' + why + '.');
+          return;
+        }
+      }
+    }
+
     byId.set(id, q);
   });
 
