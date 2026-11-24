@@ -104,6 +104,18 @@ alternative answer is kept only if it has the same words before and after
 the window. With 8 words or fewer, no `original`, or nothing changed, the
 whole sentence is shuffled as now. `original` itself is not exported.
 
+Matching rounds (from B28): a `match` row with a `rule` is checked against
+the **Rules** tab before it goes into `questions.json`. The Rules tab has one
+row per slot, with the headers Rule ID, Rule name, Slot, What the slot needs,
+Approved starts (separated by " | ") and Fixed answer. A round passes when
+every pair (`start = answer`) uses an approved start, there is exactly one
+pair per slot of that rule, each answer equals its slot's Fixed answer where
+one is given, and no two answers are the same (case and extra spaces
+ignored, accents must match). A round that fails is left out and the reason
+is logged (Extensions → Apps Script → Executions). A `match` row without a
+`rule` is exported as before, unchecked; if there is no Rules tab, rounds are
+exported unchecked and the log says so.
+
 To switch over: paste the script into the sheet and save, then run
 "Spanish Games → Move items onto the ladder" once. It gives every mistake
 with a blank Stage one: recall already passed → R, in Recall (Test 1 or
